@@ -1,0 +1,5 @@
+pytest
+requests
+psycopg[binary]>=3.1
+# plus the service dependencies:
+-r ../booking-service/requirements.txt
