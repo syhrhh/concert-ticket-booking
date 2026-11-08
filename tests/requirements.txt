@@ -1,0 +1,7 @@
+pytest
+requests
+psycopg[binary]>=3.1
+# the three services the tests start:
+-r ../booking-service/requirements.txt
+-r ../availability-service/requirements.txt
+-r ../notification-service/requirements.txt
