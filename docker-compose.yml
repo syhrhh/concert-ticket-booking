@@ -10,22 +10,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U concert_user -d concert_booking"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  availability-service:
-    build: ./availability-service
-    ports:
-      - "5002:5002"
-    environment:
-      # Inside the compose network the database host is the service name "postgres"
-      DATABASE_URL: postgresql+psycopg://concert_user:concert_pass@postgres:5432/concert_booking
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   postgres_data:
