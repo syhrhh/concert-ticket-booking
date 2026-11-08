@@ -8,8 +8,9 @@ Booking lifecycle
 
 Control points (see README for the full explanation)
 -----------------------------------------------------
-* Concurrency      : partial unique index on bookings(seat_id) for active
-                     bookings + atomic reservation at the Availability Service.
+* Concurrency      : the Availability Service reserves seats atomically (row
+                     lock + UNIQUE(concert_id, seat_id)); a loser gets 409 and
+                     the booking is stored as REJECTED.
 * Duplicate request: Idempotency-Key (UNIQUE column) claimed by the very first
                      INSERT; later requests replay the stored result.
 * Partial failure  : notifications and seat releases go through the outbox, and
@@ -35,7 +36,6 @@ log = logging.getLogger("booking.service")
 
 Result = Tuple[int, Any, Dict[str, str]]
 
-SEAT_INDEX = "uq_bookings_active_seat"
 REPLAY = {"Idempotent-Replay": "true"}
 
 # A rejection code is also the HTTP status the client sees.
@@ -129,7 +129,7 @@ def create_booking(user_id: int, concert_id: int, seat_id: int, key: Optional[st
 
     try:
         # The first INSERT is the single point that decides who "owns" the
-        # idempotency key and who gets the seat. Everything else follows from it.
+        # idempotency key. Everything else follows from it.
         with db.pool.connection() as conn:
             inserted = conn.execute(
                 """
@@ -141,10 +141,6 @@ def create_booking(user_id: int, concert_id: int, seat_id: int, key: Optional[st
                 """,
                 (booking_id, user_id, concert_id, seat_id, key, request_hash),
             ).fetchone()
-    except errors.UniqueViolation as exc:
-        if exc.diag.constraint_name == SEAT_INDEX:
-            return _seat_already_held(booking_id, user_id, concert_id, seat_id, key, request_hash)
-        raise
     except errors.ForeignKeyViolation as exc:
         code = FK_ERRORS.get(exc.diag.constraint_name, "REFERENCE_NOT_FOUND")
         return 404, {"detail": code}, {}
@@ -217,7 +213,7 @@ def _reject(booking_id: str, reason: str, from_states: Tuple[str, ...]) -> Resul
 
 
 # --------------------------------------------------------------------------
-# duplicate / conflicting requests
+# duplicate requests
 # --------------------------------------------------------------------------
 def _replay(key: str, request_hash: str) -> Result:
     """Same Idempotency-Key seen before: never create a second booking."""
@@ -246,49 +242,15 @@ def _retry_failed(row: Dict[str, Any]) -> Result:
     if releasing:  # don't re-reserve while the previous attempt is being undone
         return 503, {"detail": "RECOVERY_IN_PROGRESS", "booking": view(row)}, {"Retry-After": "2"}
 
-    try:
-        with db.pool.connection() as conn:
-            claimed = conn.execute(
-                "UPDATE bookings SET status = 'PENDING', failure_reason = NULL, updated_at = now()"
-                " WHERE booking_id = %s AND status = 'FAILED' RETURNING booking_id", (booking_id,),
-            ).fetchone()
-    except errors.UniqueViolation:  # someone else took the seat meanwhile
-        return _reject(booking_id, "SEAT_NOT_AVAILABLE", ("FAILED",))
+    with db.pool.connection() as conn:
+        claimed = conn.execute(
+            "UPDATE bookings SET status = 'PENDING', failure_reason = NULL, updated_at = now()"
+            " WHERE booking_id = %s AND status = 'FAILED' RETURNING booking_id", (booking_id,),
+        ).fetchone()
     if claimed is None:  # another retry already picked it up
         return _in_progress()
     log.info("booking %s retried after failure", booking_id)
     return _process(row)
-
-
-def _seat_already_held(booking_id: str, user_id: int, concert_id: int, seat_id: int,
-                       key: Optional[str], request_hash: str) -> Result:
-    """The database refused a second active booking for this seat."""
-    holder = _load("WHERE b.seat_id = %s AND b.status IN ('PENDING', 'CONFIRMED')", (seat_id,))
-
-    if holder and holder["user_id"] == user_id and holder["concert_id"] == concert_id:
-        # The same user is asking again (lost response, double click, missing
-        # key): answer with their existing booking instead of an error.
-        holder = _wait_until_settled(lambda: _load("WHERE b.booking_id = %s", (holder["booking_id"],))) or holder
-        log.info("booking %s returned for repeated request by same user", holder["booking_id"])
-        return 200, view(holder), dict(REPLAY)
-
-    # A different user holds the seat. Store the rejection (so the request is
-    # recorded and a retry with the same key gets the same answer).
-    with db.pool.connection() as conn:
-        stored = conn.execute(
-            """
-            INSERT INTO bookings (booking_id, user_id, concert_id, seat_id, status, failure_reason,
-                                  idempotency_key, request_hash)
-            VALUES (%s, %s, %s, %s, 'REJECTED', 'SEAT_NOT_AVAILABLE', %s, %s)
-            ON CONFLICT (idempotency_key) DO NOTHING
-            RETURNING booking_id
-            """,
-            (booking_id, user_id, concert_id, seat_id, key, request_hash),
-        ).fetchone()
-    if stored is None:
-        return _replay(key, request_hash)
-    log.info("booking %s REJECTED reason=SEAT_NOT_AVAILABLE (seat %s already held)", booking_id, seat_id)
-    return _rejection(_load("WHERE b.booking_id = %s", (booking_id,)))
 
 
 # --------------------------------------------------------------------------

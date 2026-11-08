@@ -1,30 +1,28 @@
 ============================= test session starts ==============================
 platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
-cachedir: .pytest_cache
-rootdir: /home/claude/work/concert-ticket-booking
+rootdir: /home/claude/work/integration
 plugins: platformdirs-4.13.5, anyio-4.15.1
-collecting ... collected 21 items
+collecting ... collected 20 items
 
-tests/test_booking_scenarios.py::test_successful_booking_spans_all_services PASSED [  4%]
-tests/test_booking_scenarios.py::test_conflicting_booking_is_rejected_and_recorded PASSED [  9%]
-tests/test_booking_scenarios.py::test_concurrent_bookings_for_one_seat_only_one_succeeds PASSED [ 14%]
-tests/test_booking_scenarios.py::test_database_constraint_blocks_second_active_booking PASSED [ 19%]
-tests/test_booking_scenarios.py::test_duplicate_request_with_same_key_returns_same_booking PASSED [ 23%]
-tests/test_booking_scenarios.py::test_concurrent_duplicates_with_same_key_create_one_booking PASSED [ 28%]
-tests/test_booking_scenarios.py::test_repeat_without_key_by_same_user_returns_existing_booking PASSED [ 33%]
-tests/test_booking_scenarios.py::test_same_key_with_different_request_is_refused PASSED [ 38%]
-tests/test_booking_scenarios.py::test_replayed_rejection_stays_rejected PASSED [ 42%]
-tests/test_booking_scenarios.py::test_cancel_releases_seat_and_is_idempotent PASSED [ 47%]
-tests/test_booking_scenarios.py::test_notification_down_booking_keeps_working_and_recovers PASSED [ 52%]
-tests/test_booking_scenarios.py::test_availability_down_gives_fast_503_and_same_key_retry_succeeds PASSED [ 57%]
-tests/test_booking_scenarios.py::test_stale_pending_booking_is_recovered PASSED [ 61%]
-tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body0] PASSED [ 66%]
-tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body1] PASSED [ 71%]
-tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body2] PASSED [ 76%]
+tests/test_booking_scenarios.py::test_successful_booking_spans_all_services PASSED [  5%]
+tests/test_booking_scenarios.py::test_conflicting_booking_is_rejected_and_recorded PASSED [ 10%]
+tests/test_booking_scenarios.py::test_concurrent_bookings_for_one_seat_only_one_succeeds PASSED [ 15%]
+tests/test_booking_scenarios.py::test_duplicate_request_with_same_key_returns_same_booking PASSED [ 20%]
+tests/test_booking_scenarios.py::test_concurrent_duplicates_with_same_key_create_one_booking PASSED [ 25%]
+tests/test_booking_scenarios.py::test_repeat_without_key_never_creates_a_second_confirmed_booking PASSED [ 30%]
+tests/test_booking_scenarios.py::test_same_key_with_different_request_is_refused PASSED [ 35%]
+tests/test_booking_scenarios.py::test_replayed_rejection_stays_rejected PASSED [ 40%]
+tests/test_booking_scenarios.py::test_cancel_releases_seat_and_is_idempotent PASSED [ 45%]
+tests/test_booking_scenarios.py::test_notification_down_booking_keeps_working_and_recovers PASSED [ 50%]
+tests/test_booking_scenarios.py::test_availability_down_gives_fast_503_and_same_key_retry_succeeds PASSED [ 55%]
+tests/test_booking_scenarios.py::test_stale_pending_booking_is_recovered PASSED [ 60%]
+tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body0] PASSED [ 65%]
+tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body1] PASSED [ 70%]
+tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body2] PASSED [ 75%]
 tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body3] PASSED [ 80%]
 tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body4] PASSED [ 85%]
 tests/test_booking_scenarios.py::test_invalid_input_is_rejected[body5] PASSED [ 90%]
 tests/test_booking_scenarios.py::test_bad_idempotency_key_and_ids_are_rejected PASSED [ 95%]
 tests/test_booking_scenarios.py::test_unknown_references_give_404 PASSED [100%]
 
-============================= 21 passed in 30.68s ==============================
+============================= 20 passed in 37.89s ==============================

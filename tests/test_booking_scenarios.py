@@ -87,17 +87,6 @@ def test_concurrent_bookings_for_one_seat_only_one_succeeds(stack):
     assert stack.seat_status(3) == "BOOKED"
 
 
-def test_database_constraint_blocks_second_active_booking(stack):
-    """Second line of defence: even if application logic were bypassed, the
-    database refuses two active bookings for one seat."""
-    import psycopg
-    stack.book(user_id=1, seat_id=1, key=new_key())
-    with pytest.raises(psycopg.errors.UniqueViolation):
-        stack.query(
-            "INSERT INTO bookings (booking_id, user_id, concert_id, seat_id, status)"
-            " VALUES ('BMANUAL000001', 2, 1, 1, 'CONFIRMED')")
-
-
 # ===========================================================================
 # 3. Duplicate requests
 # ===========================================================================
@@ -127,12 +116,14 @@ def test_concurrent_duplicates_with_same_key_create_one_booking(stack):
     assert stack.query("SELECT count(*) FROM bookings") == [(1,)]
 
 
-def test_repeat_without_key_by_same_user_returns_existing_booking(stack):
-    first = stack.book(user_id=1, seat_id=1)    # no Idempotency-Key at all
+def test_repeat_without_key_never_creates_a_second_confirmed_booking(stack):
+    """Without an Idempotency-Key a repeat is indistinguishable from a second
+    customer, so it is refused rather than booked twice."""
+    first = stack.book(user_id=1, seat_id=1)
     again = stack.book(user_id=1, seat_id=1)
     assert first.status_code == 201
-    assert again.status_code == 200
-    assert again.json()["booking_id"] == first.json()["booking_id"]
+    assert again.status_code == 409
+    assert stack.query("SELECT count(*) FROM bookings WHERE status = 'CONFIRMED'") == [(1,)]
 
 
 def test_same_key_with_different_request_is_refused(stack):
@@ -243,11 +234,14 @@ def test_availability_down_gives_fast_503_and_same_key_retry_succeeds(stack):
 def test_stale_pending_booking_is_recovered(stack):
     """Simulates the booking service crashing mid-request: a PENDING booking
     whose seat was already reserved. The worker must free both."""
+    # The booking row must exist before a seat can be reserved for it.
+    stack.query("INSERT INTO bookings (booking_id, user_id, concert_id, seat_id, status)"
+                " VALUES ('BC0FFEE000001', 1, 1, 3, 'PENDING')")
     requests.post(f"{URLS['availability']}/api/reservations",
                   json={"concert_id": 1, "seat_id": 3, "booking_id": "BC0FFEE000001"}).raise_for_status()
-    stack.query(
-        "INSERT INTO bookings (booking_id, user_id, concert_id, seat_id, status, updated_at)"
-        " VALUES ('BC0FFEE000001', 1, 1, 3, 'PENDING', (now() AT TIME ZONE 'UTC') - interval '60 seconds')")
+    # ...then pretend the request started a minute ago and the service died.
+    stack.query("UPDATE bookings SET updated_at = (now() AT TIME ZONE 'UTC') - interval '60 seconds'"
+                " WHERE booking_id = 'BC0FFEE000001'")
     assert stack.seat_status(3) == "BOOKED"
 
     wait_until(lambda: stack.get_booking("BC0FFEE000001").json()["status"] == "FAILED",
@@ -282,5 +276,5 @@ def test_bad_idempotency_key_and_ids_are_rejected(stack):
 def test_unknown_references_give_404(stack):
     assert stack.book(user_id=999, seat_id=1, key=new_key()).json()["detail"] == "USER_NOT_FOUND"
     assert stack.book(user_id=1, seat_id=999, key=new_key()).json()["detail"] == "SEAT_NOT_FOUND"
-    assert stack.book(user_id=1, seat_id=1, concert_id=2, key=new_key()).json()["detail"] == "CONCERT_NOT_FOUND"
+    assert stack.book(user_id=1, seat_id=1, concert_id=999, key=new_key()).json()["detail"] == "CONCERT_NOT_FOUND"
     assert stack.query("SELECT count(*) FROM bookings") == [(0,)]

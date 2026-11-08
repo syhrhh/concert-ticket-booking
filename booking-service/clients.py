@@ -26,8 +26,9 @@ class DeliveryError(Exception):
 def reserve_seat(booking_id: str, concert_id: int, seat_id: int) -> str:
     """Ask the Availability Service to reserve a seat for this booking.
 
-    booking_id is sent so the Availability Service can make the call
-    idempotent and attribute the reservation to a booking.
+    The booking must already exist as PENDING in the shared database (we insert
+    it first). booking_id makes the call idempotent and ties the reservation
+    to the booking.
     """
     try:
         resp = requests.post(
@@ -39,27 +40,43 @@ def reserve_seat(booking_id: str, concert_id: int, seat_id: int) -> str:
         log.warning("availability unreachable booking=%s error=%s", booking_id, type(exc).__name__)
         return UNAVAILABLE
 
+    code = _error_code(resp)
     if resp.status_code == 200:
         return RESERVED
-    if resp.status_code == 409:
+    if resp.status_code == 409 and code != "INVALID_BOOKING_STATE":
         return SEAT_TAKEN
-    if resp.status_code == 404:
+    if resp.status_code == 404 and code != "BOOKING_NOT_FOUND":
         return SEAT_NOT_FOUND
-    log.warning("availability unexpected status=%s booking=%s", resp.status_code, booking_id)
+    # Anything else (including a booking the Availability Service cannot see
+    # or does not accept) is a technical failure, not a verdict on the seat.
+    log.warning("availability unexpected status=%s code=%s booking=%s", resp.status_code, code, booking_id)
     return UNAVAILABLE
 
 
-def release_seat(booking_id: str, concert_id: int, seat_id: int) -> None:
-    """Release a seat. 404 counts as success (already released)."""
+def _error_code(resp: requests.Response) -> str:
+    """Availability reports errors as JSON with an error_code field."""
+    try:
+        return str(resp.json().get("error_code", ""))
+    except (ValueError, AttributeError):
+        return ""
+
+
+def release_seat(booking_id: str) -> None:
+    """Release the seat owned by this booking.
+
+    The Availability Service releases by booking id and answers 200 even when
+    there is nothing left to release, so only a 2xx counts as success. A 404 is
+    NOT treated as success: it would hide a wrong URL or an unknown booking and
+    leave the seat locked.
+    """
     try:
         resp = requests.delete(
-            f"{config.AVAILABILITY_URL}/api/reservations/{seat_id}",
-            params={"concert_id": concert_id, "booking_id": booking_id},
+            f"{config.AVAILABILITY_URL}/api/reservations/{booking_id}",
             timeout=config.NOTIFICATION_TIMEOUT,
         )
     except requests.RequestException as exc:
         raise DeliveryError(type(exc).__name__) from exc
-    if resp.status_code not in (200, 202, 204, 404):
+    if not 200 <= resp.status_code < 300:
         raise DeliveryError(f"availability returned {resp.status_code}")
 
 

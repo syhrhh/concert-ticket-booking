@@ -15,6 +15,9 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(100);
 --   REJECTED  -> business rejection (seat taken / not found); final
 --   FAILED    -> technical failure (e.g. Availability down); client may retry
 --   CANCELLED -> cancelled by the user after confirmation
+-- init.sql may already define a narrower status check (without FAILED); drop it
+-- so the full lifecycle below is allowed.
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_bookings_status') THEN
@@ -23,12 +26,10 @@ BEGIN
     END IF;
 END $$;
 
--- CONCURRENCY CONTROL (database level): a seat can have at most ONE active
--- booking. If two requests race for the same seat, PostgreSQL lets exactly one
--- INSERT succeed; the other fails with a unique violation. This holds even if
--- several Booking Service instances are running.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_seat
-    ON bookings (seat_id) WHERE status IN ('PENDING', 'CONFIRMED');
+-- NOTE: seat exclusivity is NOT enforced here. It belongs to the Availability
+-- Service (row lock + UNIQUE(concert_id, seat_id) on reservations). If an
+-- earlier version of this file created the index below, remove it.
+DROP INDEX IF EXISTS uq_bookings_active_seat;
 
 CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings (user_id, created_at DESC);
 

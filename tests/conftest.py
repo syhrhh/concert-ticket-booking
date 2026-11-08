@@ -176,7 +176,10 @@ def stack(booking_service):
     _reset_database()
     services = {
         "booking": booking_service,
-        "availability": ManagedService("availability", {"DATABASE_URL": TEST_DB_URL}),
+        # The database-backed Availability Service uses SQLAlchemy, which wants
+        # the driver named in the URL (postgresql+psycopg://).
+        "availability": ManagedService("availability", {
+            "DATABASE_URL": TEST_DB_URL.replace("postgresql://", "postgresql+psycopg://", 1)}),
         "notification": ManagedService("notification", {"DATABASE_URL": TEST_DB_URL}),
     }
     services["availability"].start(wait=False)

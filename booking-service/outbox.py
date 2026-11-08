@@ -131,7 +131,7 @@ class OutboxWorker:
         if kind in (NOTIFY_CONFIRMED, NOTIFY_CANCELLED):
             clients.send_notification(item["booking_id"], kind, payload)
         elif kind == RELEASE_SEAT:
-            clients.release_seat(item["booking_id"], payload["concert_id"], payload["seat_id"])
+            clients.release_seat(item["booking_id"])
         else:
             raise clients.DeliveryError(f"unknown outbox kind {kind}")
 
