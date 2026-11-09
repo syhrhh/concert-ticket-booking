@@ -85,21 +85,42 @@ VALUES
     (2, 'Demo Concert B', 'Example Artist B', 'Sample Hall', '2027-02-07', '19:30', 'Second demo concert')
 ON CONFLICT (concert_id) DO NOTHING;
 
-INSERT INTO seats (seat_id, concert_id, section, row_number, seat_number, price)
-VALUES
-    (1, 1, 'VIP', 'A', 'A1', 250.00),
-    (2, 1, 'VIP', 'A', 'A2', 250.00),
-    (3, 1, 'VIP', 'A', 'A3', 250.00),
-    (4, 1, 'STANDARD', 'B', 'B1', 120.00),
-    (5, 1, 'STANDARD', 'B', 'B2', 120.00),
-    (6, 1, 'STANDARD', 'B', 'B3', 120.00),
-    (7, 2, 'STANDARD', 'A', 'A1', 100.00),
-    (8, 2, 'STANDARD', 'A', 'A2', 100.00),
-    -- Seats used by the four compulsory demos (A12 success, A13 conflict, A14 partial failure)
-    (9, 1, 'VIP', 'A', 'A12', 250.00),
-    (10, 1, 'VIP', 'A', 'A13', 250.00),
-    (11, 1, 'VIP', 'A', 'A14', 250.00)
-ON CONFLICT (seat_id) DO NOTHING;
+-- Seats are generated from this layout table, one row per section.
+-- Edit the VALUES list to add/remove sections, change prices, rows or seats per row.
+-- Each section gets rows A.. (rows) x seats 1.. (seats_per_row).
+-- seat_number is "<section>-<row><nn>" (e.g. 133-A12) so it stays unique per concert,
+-- as required by UNIQUE(concert_id, seat_number) in the agreed design.
+-- Price tiers (fictional): Zone A RM450, Zone B RM350, Zone C RM280, Zone D RM200.
+WITH layout (concert_id, section, price, rows, seats_per_row) AS (
+    VALUES
+        -- Concert 1: arena with lower bowl (1xx) and upper bowl (2xx)
+        (1, '104', 280.00, 10, 20),   -- Zone C
+        (1, '105', 280.00, 10, 20),   -- Zone C
+        (1, '106', 280.00, 10, 20),   -- Zone C
+        (1, '111', 350.00, 10, 20),   -- Zone B
+        (1, '112', 350.00, 10, 20),   -- Zone B
+        (1, '114', 450.00, 10, 20),   -- Zone A
+        (1, '115', 450.00, 10, 20),   -- Zone A
+        (1, '116', 450.00, 10, 20),   -- Zone A
+        (1, '133', 350.00, 10, 20),   -- Zone B
+        (1, '207', 200.00, 10, 20),   -- Zone D
+        (1, '232', 200.00, 10, 20),   -- Zone D
+        (1, '233', 200.00, 10, 20),   -- Zone D
+        -- Concert 2: small hall
+        (2, '101', 150.00,  5, 12),
+        (2, '102', 100.00,  5, 12)
+)
+INSERT INTO seats (concert_id, section, row_number, seat_number, price)
+SELECT l.concert_id,
+       l.section,
+       chr(64 + r.n),
+       l.section || '-' || chr(64 + r.n) || lpad(s.n::text, 2, '0'),
+       l.price
+FROM layout l
+CROSS JOIN LATERAL generate_series(1, l.rows) AS r(n)
+CROSS JOIN LATERAL generate_series(1, l.seats_per_row) AS s(n)
+ORDER BY l.concert_id, l.section, r.n, s.n
+ON CONFLICT (concert_id, seat_number) DO NOTHING;
 
 -- Ensure automatically generated IDs continue after seeded explicit IDs.
 SELECT setval(pg_get_serial_sequence('concerts', 'concert_id'),
