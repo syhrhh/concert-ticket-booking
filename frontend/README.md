@@ -97,3 +97,18 @@ This avoids browser CORS problems *during Vite development*; **the API services 
 ## Important group practice
 
 Only submit **frontend/** changes to your `feature/frontend` Git branch. Don't overwrite the group's existing backend. Coordinate the actual API response format and server availability with Members 2–4, then have everyone verify the final deployment and diagrams.
+
+## Theater-style seat map (frontend upgrade)
+
+The individual-seat seating chart lives in `src/SeatPicker.jsx`. Its layout
+helper `src/seatLayout.mjs` groups the real seat records returned by the
+Availability API into rows and seating blocks. Each seat uses its actual
+`seat_id`, `status`, and `price`; missing positions cannot be booked.
+
+The chart supports hover feedback, selected and unavailable chairs, section
+pricing, a zoom control, accessible labels and horizontal scrolling on mobile.
+The original Booking API and its idempotency-key logic are unchanged.
+
+To test the seat layout and API contracts: `npm run test:contract`.
+For a larger demo chart, coordinate with the database owner before running
+`optional-demo-data/expand_demo_seats.sql` from the accompanying upgrade ZIP.
