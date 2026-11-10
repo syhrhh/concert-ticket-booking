@@ -27,5 +27,26 @@ services:
       postgres:
         condition: service_healthy
 
+  booking-service:
+    build: ./booking-service
+    ports:
+      - "5001:5001"
+    environment:
+      # Inside the compose network, services are reached by their service name.
+      DATABASE_URL: postgresql://concert_user:concert_pass@postgres:5432/concert_booking
+      AVAILABILITY_URL: http://availability-service:5002
+      NOTIFICATION_URL: http://notification-service:5003
+      # Browser origins allowed to call this API (the React frontend)
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
 volumes:
   postgres_data:
