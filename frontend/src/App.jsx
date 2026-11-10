@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import SeatPicker from './SeatPicker';
 
 const ICONS = {
   ticket: <><path d="M3 8.5A2.5 2.5 0 0 0 5.5 6H20v4a2 2 0 0 0 0 4v4H5.5A2.5 2.5 0 0 0 3 15.5Z"/><path d="M13 6v2m0 3v2m0 3v2"/></>,
@@ -161,7 +162,12 @@ function App() {
     setSeatLoading(true); setSeatError('');
     try {
       const { data } = await api.seats(concertId);
-      setSeatsByConcert(prev => ({ ...prev, [concertId]: Array.isArray(data) ? data : [] }));
+      const refreshedSeats = Array.isArray(data) ? data : [];
+      setSeatsByConcert(prev => ({ ...prev, [concertId]: refreshedSeats }));
+      // A selected chair may have been booked by someone else since last load.
+      setSelectedSeatId(prev => prev != null && !refreshedSeats.some(
+        seat => seat.seat_id === prev && seat.status === 'AVAILABLE'
+      ) ? null : prev);
     } catch (err) { setSeatError(err.message); }
     finally { setSeatLoading(false); }
   }, []);
@@ -195,15 +201,6 @@ function App() {
   const selectedConcert = concerts.find(item => item.concert_id === selectedConcertId);
   const seats = seatsByConcert[selectedConcertId] || [];
   const selectedSeat = seats.find(item => item.seat_id === selectedSeatId);
-  const seatGroups = useMemo(() => {
-    const groups = new Map();
-    seats.forEach(seat => {
-      const name = `${seat.section || 'General'} • Row ${seat.row_number || '?'}`;
-      if (!groups.has(name)) groups.set(name, []);
-      groups.get(name).push(seat);
-    });
-    return [...groups.entries()];
-  }, [seats]);
   const availableCount = seats.filter(s => s.status === 'AVAILABLE').length;
   const confirmedCount = bookings.filter(b => b.status === 'CONFIRMED').length;
   const bookingLookup = useMemo(() => Object.fromEntries(concerts.map(c => [c.concert_id,c])), [concerts]);
@@ -219,7 +216,7 @@ function App() {
   };
   const selectSeat = seat => {
     if (seat.status !== 'AVAILABLE') return;
-    setSelectedSeatId(seat.seat_id);
+    setSelectedSeatId(current => current === seat.seat_id ? null : seat.seat_id);
   };
   const openBooking = () => {
     if (!selectedSeat || !selectedConcert) return;
@@ -310,14 +307,19 @@ function App() {
         <section className="booking-section page-width" id="seat-section" ref={seatSectionRef}>
           <div className="section-heading section-heading-book"><div><span className="eyebrow"><span className="tiny-dot"/> YOUR SEAT, YOUR STORY</span><h2>Choose your <em>spot.</em></h2><p>Select a concert above, then choose an available seat below.</p></div></div>
           {!selectedConcert ? <div className="choose-event-state glass-surface"><div className="choose-event-icon"><Icon name="ticket" size={35}/></div><h3>The best nights start with a seat.</h3><p>Select any concert from the lineup to view the live seating chart.</p><button type="button" className="button-outline" onClick={() => document.getElementById('concerts')?.scrollIntoView({behavior:'smooth'})}>Browse the lineup <Icon name="arrow" size={15}/></button></div> :
-          <div className="seat-layout">
-            <div className="seat-map glass-surface">
-              <div className="seat-map-header"><div><span className="eyebrow small">SEAT SELECTION</span><h3>{selectedConcert.concert_name}</h3><p><Icon name="pin" size={14}/> {selectedConcert.venue}</p></div><button type="button" className="small-refresh" onClick={() => loadSeats(selectedConcertId)} aria-label="Refresh seat availability"><Icon name="refresh" size={17}/></button></div>
-              <div className="stage"><div className="stage-gradient"/><span>STAGE</span></div>
-              <div className="seat-legend"><span><i className="seat-available"/> Available</span><span><i className="seat-selected"/> Selected</span><span><i className="seat-taken"/> Unavailable</span></div>
-              {seatLoading ? <div className="seats-status"><div className="spinner"/> Checking current seat availability...</div> : seatError ? <StateView title="Seats unavailable" message={seatError} onRetry={() => loadSeats(selectedConcertId)}/> : seatGroups.length === 0 ? <div className="seats-status">No seats are configured for this concert.</div> : <div className="seat-groups">{seatGroups.map(([group, groupSeats]) => <div className="seat-group" key={group}><div className="seat-group-heading"><span>{group}</span><small>{money(Math.min(...groupSeats.map(s => Number(s.price))))} / seat</small></div><div className="seat-grid">{groupSeats.map(seat => <button key={seat.seat_id} type="button" className={`seat ${seat.status === 'AVAILABLE' ? 'available' : 'unavailable'} ${selectedSeatId === seat.seat_id ? 'picked' : ''}`} disabled={seat.status !== 'AVAILABLE'} onClick={() => selectSeat(seat)} aria-pressed={selectedSeatId === seat.seat_id} title={`${seat.seat_number} • ${seat.status} • ${money(seat.price)}`}>{seat.seat_number}</button>)}</div></div>)}</div>}
-              <div className="seat-map-footer"><Icon name="info" size={15}/><span>{seatLoading ? 'Updating availability' : `${availableCount} seat${availableCount === 1 ? '' : 's'} currently available. Availability may change before confirmation.`}</span></div>
-            </div>
+          <div className="seat-layout seat-layout-cinema">
+            <SeatPicker
+              concert={selectedConcert}
+              seats={seats}
+              selectedSeatId={selectedSeatId}
+              selectedSeat={selectedSeat}
+              onSeatSelect={selectSeat}
+              loading={seatLoading}
+              error={seatError}
+              onRefresh={() => loadSeats(selectedConcertId)}
+              availableCount={availableCount}
+              money={money}
+            />
             <aside className="booking-summary glass-surface"><span className="eyebrow small">YOUR EXPERIENCE</span><h3>Booking summary</h3><div className="summary-divider"/><div className="summary-row"><span>Concert</span><strong>{selectedConcert.concert_name}</strong></div><div className="summary-row"><span>Date & time</span><strong>{fullDate(selectedConcert.concert_date)}<br/>{prettyTime(selectedConcert.concert_time)}</strong></div><div className="summary-row"><span>Seat</span><strong>{selectedSeat ? `${selectedSeat.section || 'General'} · ${selectedSeat.seat_number}` : 'Not selected'}</strong></div><div className="summary-price"><span>Total</span><strong>{selectedSeat ? money(selectedSeat.price) : '—'}</strong></div><GradientButton disabled={!selectedSeat || seatLoading} onClick={openBooking} className="booking-pay">{selectedSeat ? 'Continue to booking' : 'Choose a seat first'}</GradientButton><p className="summary-fineprint"><Icon name="shield" size={14}/> Booking is confirmed only after the server reserves the seat. Demo only — no payment.</p></aside>
           </div>}
         </section>

@@ -1,0 +1,38 @@
+/* ENCORE two-level section -> seat selection. All sections come from the API. */
+.arena-overview { padding-top:21px; }
+.arena-intro {text-align:center;max-width:560px;margin:0 auto 4px;}
+.arena-intro h4,.arena-detail-title h4 {font-family:'Outfit','DM Sans',sans-serif;font-size:clamp(23px,3.5vw,34px);letter-spacing:-.8px;margin:10px 0 8px;color:#fff8fc;}
+.arena-intro p,.arena-detail-title p {color:#afa7b5;font-size:12px;line-height:1.8;max-width:440px;margin:0 auto;}
+.arena-diagram {margin:4px auto 0; max-width:970px;overflow:hidden;}
+.arena-svg {display:block;width:100%;height:auto;max-height:455px;}
+.arena-stage-text {font-size:13px;font-weight:800;letter-spacing:3px;fill:#f8d9dc;}
+.arena-center-title {font-family:'Outfit','DM Sans',sans-serif;font-size:29px;font-weight:900;letter-spacing:6px;fill:#f8e0ec;opacity:.47;}
+.arena-center-subtitle {font-family:'DM Sans',sans-serif;font-size:9px;letter-spacing:3px;fill:#c7a3b9;opacity:.65;}
+.arena-piece {cursor:pointer;outline:none;}
+.arena-piece-shape {transition:filter .18s ease,fill-opacity .18s ease,stroke-width .18s ease;}
+.arena-piece:hover .arena-piece-shape,.arena-piece:focus-visible .arena-piece-shape {fill-opacity:.96;stroke:#fff0de;stroke-width:2;filter:drop-shadow(0 0 9px var(--arena-piece-color));}
+.arena-piece:focus-visible {outline:none;}
+.arena-piece-label {font-family:'Outfit','DM Sans',sans-serif;font-size:15px;font-weight:850;letter-spacing:1px;fill:#1b1020;pointer-events:none;}
+.arena-section-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 2px 12px;margin-top:-6px;}
+.arena-section-heading strong {font-size:13px;color:#f9e8ef;}
+.arena-section-heading small {font-size:10px;color:#ac9faa;}
+.arena-section-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;}
+.arena-section-card {width:100%;border:1px solid rgba(252,201,217,.17);border-radius:14px;min-height:77px;padding:12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.042);color:inherit;text-align:left;cursor:pointer;transition:transform .16s,border-color .16s,background .16s,box-shadow .16s;}
+.arena-section-card:hover,.arena-section-card:focus-visible {outline:none;transform:translateY(-2px);border-color:rgba(246,148,176,.60);background:rgba(233,111,162,.09);box-shadow:0 12px 24px rgba(0,0,0,.17);}
+.arena-section-swatch {width:5px;height:42px;border-radius:10px;flex:0 0 5px;box-shadow:0 0 17px rgba(242,117,168,.24);}
+.arena-section-detail {display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;}
+.arena-section-detail strong {font-size:13px;color:#fff4f9;letter-spacing:.3px;overflow-wrap:anywhere;}
+.arena-section-detail small {font-size:10px;color:#a8a0b0;line-height:1.4;}
+.arena-section-price {font-size:12px;font-weight:800;color:#f5cfb8;white-space:nowrap;}
+.arena-section-arrow {font-size:16px;color:#f3aab6;}
+.arena-map-disclaimer {font-size:10px;line-height:1.6;text-align:center;color:#8e8595;margin:17px 0 2px;}
+.arena-detail-top {display:flex;align-items:center;gap:18px;margin:25px 0 0;}
+.arena-detail-title {flex:1;min-width:0;}
+.arena-detail-title h4 {font-size:26px;margin:5px 0 1px;}
+.arena-detail-title p {margin:0;}
+.arena-back-button {border:1px solid rgba(244,189,196,.28);background:rgba(255,255,255,.055);color:#ffcad5;border-radius:12px;min-height:40px;padding:10px 13px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s;}
+.arena-back-button:hover,.arena-back-button:focus-visible {background:rgba(234,117,163,.16);border-color:rgba(255,203,221,.6);}
+.seat-detail-screen .cinema-stage {margin:25px auto 15px;}
+.seat-detail-screen .cinema-toolbar {margin:10px 0;}
+@media(max-width:590px){.arena-svg {min-width:0;}.arena-piece-label{font-size:19px;}.arena-section-list{grid-template-columns:1fr;}.arena-section-heading{margin-top:4px;}.arena-detail-top {gap:10px;align-items:start;flex-wrap:wrap;}.arena-detail-title h4{font-size:22px;}.arena-back-button{font-size:11px;}.arena-overview{padding-top:12px;}}
+@media(prefers-reduced-motion:reduce){.arena-piece-shape,.arena-section-card{transition:none;}}
