@@ -102,3 +102,24 @@
   .selected-seat-price {font-size:13px;}
 }
 @media(prefers-reduced-motion:reduce){.theater-chair,.theater-chair-icon,.cinema-zoom button{transition:none;}}
+
+/* Higher contrast chair palette: aqua is selectable, coral/gold is selected. */
+.cinema-legend-dot.available { background: #45D6E9; border-color:#A6F3FA; box-shadow:0 0 8px rgba(69,214,233,.26); }
+.cinema-legend-dot.unavailable { background:#393540; border-color:#4F4A57; }
+.theater-chair.available { color:#58D7E9; }
+.theater-chair.available .chair-back { fill:#258A9D; stroke:#79E8F4; stroke-width:1.4; }
+.theater-chair.available .chair-frame, .theater-chair.available .chair-base {stroke:#71DEEC;}
+.theater-chair.available .theater-chair-number{color:#E5FCFF;}
+.theater-chair.available:hover { color:#C5FCFF; transform:translateY(-4px) scale(1.07); }
+.theater-chair.available:hover .chair-back { fill:#45D6E9; stroke:#D3FCFF; }
+.theater-chair.available:hover .chair-frame, .theater-chair.available:hover .chair-base {stroke:#D3FCFF;}
+.theater-chair.available:focus-visible { outline:2px solid #F8CE8B; outline-offset:3px; border-radius:5px; }
+.theater-chair.selected { color:#FFD49A; transform:translateY(-3px); filter:drop-shadow(0 3px 10px rgba(248,127,158,.44)); }
+.theater-chair.selected .chair-back { fill:#F17C9D; stroke:#FFE5A6; stroke-width:2; }
+.theater-chair.selected .chair-frame, .theater-chair.selected .chair-base {stroke:#FFCE78;}
+.theater-chair.selected .theater-chair-number { color:#FFE9B4; }
+.theater-chair.unavailable { color:#46404E; opacity:.58; }
+.theater-chair.unavailable .chair-back {fill:#292630;stroke:#514A59;}
+.cinema-legend-dot.selected {background:linear-gradient(120deg,#FFE08C,#F18AA6,#ED3785);border-color:#FFE3A7;box-shadow:0 0 10px rgba(244,117,164,.23);}
+.zone-pick-count { color:#8BDCEB; font-weight:600; text-transform:none; letter-spacing:0; margin-left:5px; }
+.seat-limit-notice {margin:11px 0 0; color:#FFD2A6; font-size:12px; font-weight:600;}

@@ -40,8 +40,8 @@ function SeatButton({ seat, number, selected, onSeatSelect, money }) {
  * Selected seat is still passed back to the existing App.jsx booking workflow.
  */
 export default function SeatPicker({
-  concert, seats, selectedSeatId, onSeatSelect, loading, error, onRefresh,
-  availableCount, selectedSeat, money,
+  concert, seats, selectedSeatIds, selectedSeats, maxSeats = 6, onSeatSelect, loading, error, onRefresh,
+  availableCount, money,
 }) {
   const zones = useMemo(() => buildSeatLayout(seats), [seats]);
   const [zoom, setZoom] = useState(1);
@@ -64,7 +64,7 @@ export default function SeatPicker({
     {loading ? <div className="seats-status"><div className="spinner"/> Checking current seat availability...</div>
       : error ? <div className="seat-load-error" role="alert"><strong>Seats unavailable</strong><p>{error}</p><button className="button-outline" type="button" onClick={onRefresh}><RefreshSymbol/> Try again</button></div>
       : zones.length === 0 ? <div className="seats-status">No seats are configured for this concert.</div>
-      : !showDetail ? <ArenaOverview zones={zones} money={money} selectedSeat={selectedSeat} onSelect={section => { if (selectedSeat && selectedSeat.section !== section) onSeatSelect(selectedSeat); setActiveSection(section); setZoom(1); }} />
+      : !showDetail ? <ArenaOverview zones={zones} money={money} selectedSeats={selectedSeats} onSelect={section => { setActiveSection(section); setZoom(1); }} />
       : <div className="seat-detail-screen" data-testid="seat-detail">
         <div className="arena-detail-top">
           <button type="button" className="arena-back-button" onClick={() => setActiveSection(null)} aria-label="Back to venue sections">← <span>All sections</span></button>
@@ -78,7 +78,7 @@ export default function SeatPicker({
             const aisles = aisleAfter(zone.columns);
             return <section className="cinema-zone" key={zone.section} aria-label={`${zone.section} seats`}>
               <div className="cinema-zone-heading">
-                <span className="cinema-zone-name"><span className="zone-dash"/>{zone.section}</span>
+                <span className="cinema-zone-name"><span className="zone-dash"/>{zone.section} <span className="zone-pick-count">· {selectedSeats.filter(seat => seat.section === zone.section).length} selected here</span></span>
                 <span className="cinema-zone-meta">{zone.prices.length === 1 ? money(zone.prices[0]) : zone.prices.length > 1 ? `${money(zone.prices[0])} – ${money(zone.prices.at(-1))}` : 'Price unavailable'} / seat</span>
               </div>
               <div className="cinema-rows">
@@ -92,7 +92,7 @@ export default function SeatPicker({
                       {seat ? <SeatButton
                         seat={seat}
                         number={seatPosition(seat) ?? seat.seat_number}
-                        selected={selectedSeatId === seat.seat_id}
+                        selected={selectedSeatIds.includes(seat.seat_id)}
                         onSeatSelect={onSeatSelect}
                         money={money}
                       /> : <span className="cinema-empty-position" aria-hidden="true"/>}
@@ -110,11 +110,14 @@ export default function SeatPicker({
 
     <div className="cinema-selected-summary" aria-live="polite">
       <div className="cinema-selected-left">
-        <span className={`selected-indicator ${selectedSeat ? 'has-selection' : ''}`}/>
-        <div><small>{selectedSeat ? 'YOUR SELECTION' : 'PICK YOUR PERFECT VIEW'}</small><strong>{selectedSeat ? `${selectedSeat.section || 'General'} · Row ${selectedSeat.row_number || '?'} · Seat ${selectedSeat.seat_number}` : showDetail ? 'Tap an available chair above to select it' : 'Choose a section above to see its available seats'}</strong></div>
+        <span className={`selected-indicator ${selectedSeats.length ? 'has-selection' : ''}`}/>
+        <div><small>YOUR SEATS · {selectedSeats.length} / {maxSeats} SELECTED</small>
+          <strong>{selectedSeats.length ? selectedSeats.map(seat=>seat.seat_number).join(' · ') : showDetail ? 'Tap available chairs to select up to six seats' : 'Choose a section above to view available seats'}</strong>
+        </div>
       </div>
-      {selectedSeat && <strong className="selected-seat-price">{money(selectedSeat.price)}</strong>}
+      {selectedSeats.length > 0 && <strong className="selected-seat-price">{money(selectedSeats.reduce((sum, seat)=>sum+Number(seat.price||0),0))}</strong>}
     </div>
+    {selectedSeats.length >= maxSeats && <div className="seat-limit-notice" role="status">Six seats selected — deselect a chair to choose a different one.</div>}
     <div className="seat-map-footer">
       <span className="seat-map-foot-icon" aria-hidden="true">ⓘ</span>
       <span><strong>{availableCount}</strong> seat{availableCount === 1 ? '' : 's'} available. Only seats returned by the Availability Service can be selected. Availability may change before confirmation.</span>
