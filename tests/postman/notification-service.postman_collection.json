@@ -1,0 +1,192 @@
+{
+  "info": {
+    "name": "Concert Booking - Notification Service evidence",
+    "description": "Run with the whole system up (docker compose up -d). Click the collection > Run. Every request has tests; the Runner screenshot is the evidence.\n\nPart A tests the Notification Service directly (port 5003).\nPart B goes through the Booking Service (5001) to show the notification arriving end-to-end.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "booking", "value": "http://localhost:5001" },
+    { "key": "availability", "value": "http://localhost:5002" },
+    { "key": "notification", "value": "http://localhost:5003" },
+    { "key": "user_id", "value": "1" },
+    { "key": "concert_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "A. Notification Service (direct)",
+      "item": [
+        {
+          "name": "A1 Health check",
+          "request": { "method": "GET", "url": "{{notification}}/health" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('service and database are UP', () => {",
+            "  const b = pm.response.json();",
+            "  pm.expect(b.status).to.eql('UP');",
+            "  pm.expect(b.database).to.eql('UP');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "A2 Create notification (new)",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": [
+              "// A fresh booking id (B + 12 hex) and key for every run",
+              "const hex = [...Array(12)].map(() => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join('');",
+              "pm.collectionVariables.set('test_booking_id', 'B' + hex);",
+              "pm.collectionVariables.set('test_key', 'B' + hex + ':NOTIFY_CONFIRMED');"
+            ] } },
+            { "listen": "test", "script": { "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const b = pm.response.json();",
+              "pm.test('stored as SENT', () => pm.expect(b.status).to.eql('SENT'));",
+              "pm.collectionVariables.set('first_notification_id', b.notification_id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{test_key}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"booking_id\": \"{{test_booking_id}}\",\n  \"user_id\": {{user_id}},\n  \"type\": \"BOOKING_CONFIRMED\",\n  \"message\": \"Your ticket booking {{test_booking_id}} has been confirmed.\"\n}" },
+            "url": "{{notification}}/api/notifications"
+          }
+        },
+        {
+          "name": "A3 Same request again (retry) -> no duplicate",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK (not 201: nothing new created)', () => pm.response.to.have.status(200));",
+            "pm.test('Idempotent-Replay header', () => pm.expect(pm.response.headers.get('Idempotent-Replay')).to.eql('true'));",
+            "pm.test('same notification returned', () =>",
+            "  pm.expect(pm.response.json().notification_id).to.eql(Number(pm.collectionVariables.get('first_notification_id'))));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{test_key}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"booking_id\": \"{{test_booking_id}}\",\n  \"user_id\": {{user_id}},\n  \"type\": \"BOOKING_CONFIRMED\",\n  \"message\": \"Your ticket booking {{test_booking_id}} has been confirmed.\"\n}" },
+            "url": "{{notification}}/api/notifications"
+          }
+        },
+        {
+          "name": "A4 Same key for a different booking -> refused",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('422', () => pm.response.to.have.status(422));",
+            "pm.test('IDEMPOTENCY_KEY_REUSED', () => pm.expect(pm.response.json().detail).to.eql('IDEMPOTENCY_KEY_REUSED'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{test_key}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"booking_id\": \"BFFFFFFFFFFFF\",\n  \"user_id\": {{user_id}},\n  \"type\": \"BOOKING_CONFIRMED\",\n  \"message\": \"Different message\"\n}" },
+            "url": "{{notification}}/api/notifications"
+          }
+        },
+        {
+          "name": "A5 Invalid / malicious input -> 422",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('422', () => pm.response.to.have.status(422));",
+            "pm.test('every bad field is reported', () => {",
+            "  const f = pm.response.json().fields;",
+            "  ['booking_id', 'user_id', 'type', 'message', 'status'].forEach(x => pm.expect(f).to.include(x));",
+            "});"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"booking_id\": \"B1'; DROP TABLE notifications;--\",\n  \"user_id\": -1,\n  \"type\": \"SPAM\",\n  \"message\": \"\",\n  \"status\": \"FAILED\"\n}" },
+            "url": "{{notification}}/api/notifications"
+          }
+        },
+        {
+          "name": "A6 List the user's notifications",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const list = pm.response.json();",
+            "const id = pm.collectionVariables.get('test_booking_id');",
+            "pm.test('A2 notification is listed exactly once', () =>",
+            "  pm.expect(list.filter(n => n.booking_id === id).length).to.eql(1));"
+          ] } }],
+          "request": { "method": "GET", "url": "{{notification}}/api/users/{{user_id}}/notifications" }
+        }
+      ]
+    },
+    {
+      "name": "B. End-to-end through the Booking Service",
+      "item": [
+        {
+          "name": "B1 Booking sees all dependencies",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('availability + notification UP', () => {",
+            "  pm.expect(b.availability_service).to.eql('UP');",
+            "  pm.expect(b.notification_service).to.eql('UP');",
+            "});"
+          ] } }],
+          "request": { "method": "GET", "url": "{{booking}}/health/dependencies" }
+        },
+        {
+          "name": "B2 Book a free seat",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": [
+              "// Pick a free seat from the Availability Service, new Idempotency-Key per run",
+              "pm.collectionVariables.set('booking_key', 'postman-' + pm.variables.replaceIn('{{$guid}}'));",
+              "pm.sendRequest(pm.collectionVariables.get('availability') + '/api/concerts/' + pm.collectionVariables.get('concert_id') + '/seats', (err, res) => {",
+              "  const free = res.json().filter(s => s.status === 'AVAILABLE');",
+              "  pm.collectionVariables.set('seat_id', free[free.length - 1].seat_id);",
+              "});"
+            ] } },
+            { "listen": "test", "script": { "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const b = pm.response.json();",
+              "pm.test('CONFIRMED', () => pm.expect(b.status).to.eql('CONFIRMED'));",
+              "pm.collectionVariables.set('booking_id', b.booking_id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{booking_key}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{user_id}},\n  \"concert_id\": {{concert_id}},\n  \"seat_id\": {{seat_id}}\n}" },
+            "url": "{{booking}}/api/bookings"
+          }
+        },
+        {
+          "name": "B3 Booking shows notification SENT",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": [
+              "// give the outbox worker a moment to deliver",
+              "setTimeout(() => {}, 2000);"
+            ] } },
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('notification_status SENT', () => pm.expect(pm.response.json().notification_status).to.eql('SENT'));"
+            ] } }
+          ],
+          "request": { "method": "GET", "url": "{{booking}}/api/bookings/{{booking_id}}" }
+        },
+        {
+          "name": "B4 Notification arrived at the Notification Service",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const id = pm.collectionVariables.get('booking_id');",
+            "const mine = pm.response.json().filter(n => n.booking_id === id);",
+            "pm.test('exactly one confirmation for this booking', () => {",
+            "  pm.expect(mine.length).to.eql(1);",
+            "  pm.expect(mine[0].type).to.eql('BOOKING_CONFIRMED');",
+            "});"
+          ] } }],
+          "request": { "method": "GET", "url": "{{notification}}/api/users/{{user_id}}/notifications" }
+        }
+      ]
+    }
+  ]
+}

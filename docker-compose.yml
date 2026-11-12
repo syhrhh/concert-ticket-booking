@@ -16,6 +16,27 @@ services:
       timeout: 3s
       retries: 10
 
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "5003:5003"
+    environment:
+      # Inside the compose network the database host is the service name "postgres"
+      DATABASE_URL: postgresql://concert_user:concert_pass@postgres:5432/concert_booking
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      # DEMO ONLY: off (normal) | error (answers 503) | slow (saves, then replies late)
+      # Browser origins allowed to call this API (the react frontend)
+      FAULT_MODE: ${NOTIFICATION_FAULT_MODE:-off}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   availability-service:
     build: ./availability-service
     ports:
