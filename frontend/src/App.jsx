@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import SeatPicker from './SeatPicker';
+import { MAX_SEATS_PER_CHECKOUT, toggleSeatId, reconcileSeatIds, createCheckoutItems, submitCheckoutItems, checkoutCounts } from './multiSeatBooking.mjs';
 
 const ICONS = {
   ticket: <><path d="M3 8.5A2.5 2.5 0 0 0 5.5 6H20v4a2 2 0 0 0 0 4v4H5.5A2.5 2.5 0 0 0 3 15.5Z"/><path d="M13 6v2m0 3v2m0 3v2"/></>,
@@ -111,6 +113,91 @@ function Modal({ children, onClose, wide = false }) {
   </div>;
 }
 
+/** Rounded, keyboard-accessible demo-account picker. The selected user is still
+ * managed by App, so existing booking / notification API behavior is unchanged. */
+function DemoUserPicker({ userId, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const optionRefs = useRef([]);
+  const users = [1, 2];
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutsideClick = event => {
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onEscape = event => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onOutsideClick);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutsideClick);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) optionRefs.current[users.indexOf(userId)]?.focus();
+  }, [open, userId]);
+
+  const pickUser = id => {
+    onSelect(id);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const handleOptionKeyDown = (event, index) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const nextIndex = (index + (event.key === 'ArrowDown' ? 1 : -1) + users.length) % users.length;
+      optionRefs.current[nextIndex]?.focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      optionRefs.current[event.key === 'Home' ? 0 : users.length - 1]?.focus();
+    }
+  };
+
+  return <div className="demo-user-picker" ref={containerRef}>
+    <button
+      type="button"
+      className={`user-select user-select-trigger ${open ? 'is-open' : ''}`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-controls="demo-account-menu"
+      aria-label={`Demo user ${String(userId).padStart(2, '0')}. Choose demo user`}
+      onClick={() => setOpen(value => !value)}
+      ref={triggerRef}
+    >
+      <Icon name="user" size={16}/>
+      <span className="user-text">Demo user</span>
+      <span className="user-number">{String(userId).padStart(2, '0')}</span>
+      <Icon name="chevron" size={13} className="user-chevron"/>
+    </button>
+    {open && <div className="demo-user-menu" role="menu" aria-label="Demo accounts" id="demo-account-menu">
+      <span className="demo-user-menu-caption">SWITCH DEMO USER</span>
+      {users.map((id, index) => <button
+        type="button"
+        key={id}
+        ref={element => { optionRefs.current[index] = element; }}
+        className={`demo-user-option ${userId === id ? 'is-active' : ''}`}
+        role="menuitemradio"
+        aria-checked={userId === id}
+        onClick={() => pickUser(id)}
+        onKeyDown={event => handleOptionKeyDown(event, index)}
+      >
+        <span className="demo-user-option-icon"><Icon name="user" size={15}/></span>
+        <span>Demo user {String(id).padStart(2, '0')}</span>
+        {userId === id && <Icon name="check" size={16} className="demo-user-option-check"/>}
+      </button>)}
+    </div>}
+  </div>;
+}
+
 function App() {
   const [page, setPage] = useState('discover');
   const [concerts, setConcerts] = useState([]);
@@ -119,7 +206,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('soonest');
   const [selectedConcertId, setSelectedConcertId] = useState(null);
-  const [selectedSeatId, setSelectedSeatId] = useState(null);
+  const [selectedSeatIds, setSelectedSeatIds] = useState([]);
   const [seatsByConcert, setSeatsByConcert] = useState({});
   const [seatLoading, setSeatLoading] = useState(false);
   const [seatError, setSeatError] = useState('');
@@ -161,7 +248,10 @@ function App() {
     setSeatLoading(true); setSeatError('');
     try {
       const { data } = await api.seats(concertId);
-      setSeatsByConcert(prev => ({ ...prev, [concertId]: Array.isArray(data) ? data : [] }));
+      const refreshedSeats = Array.isArray(data) ? data : [];
+      setSeatsByConcert(prev => ({ ...prev, [concertId]: refreshedSeats }));
+      // Seats booked by someone else during a refresh are no longer selectable.
+      setSelectedSeatIds(prev => reconcileSeatIds(prev, refreshedSeats));
     } catch (err) { setSeatError(err.message); }
     finally { setSeatLoading(false); }
   }, []);
@@ -194,16 +284,11 @@ function App() {
   }, [concerts, search, sort]);
   const selectedConcert = concerts.find(item => item.concert_id === selectedConcertId);
   const seats = seatsByConcert[selectedConcertId] || [];
-  const selectedSeat = seats.find(item => item.seat_id === selectedSeatId);
-  const seatGroups = useMemo(() => {
-    const groups = new Map();
-    seats.forEach(seat => {
-      const name = `${seat.section || 'General'} • Row ${seat.row_number || '?'}`;
-      if (!groups.has(name)) groups.set(name, []);
-      groups.get(name).push(seat);
-    });
-    return [...groups.entries()];
-  }, [seats]);
+  const selectedSeats = useMemo(() => {
+    const byId = new Map(seats.map(seat => [seat.seat_id, seat]));
+    return selectedSeatIds.map(id => byId.get(id)).filter(Boolean);
+  }, [seats, selectedSeatIds]);
+  const selectedTotal = selectedSeats.reduce((total, seat) => total + Number(seat.price || 0), 0);
   const availableCount = seats.filter(s => s.status === 'AVAILABLE').length;
   const confirmedCount = bookings.filter(b => b.status === 'CONFIRMED').length;
   const bookingLookup = useMemo(() => Object.fromEntries(concerts.map(c => [c.concert_id,c])), [concerts]);
@@ -214,33 +299,42 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const chooseConcert = id => {
-    setPage('discover'); setSelectedConcertId(id); setSelectedSeatId(null); loadSeats(id);
+    setPage('discover'); setSelectedConcertId(id); setSelectedSeatIds([]); loadSeats(id);
     setTimeout(() => seatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
   const selectSeat = seat => {
     if (seat.status !== 'AVAILABLE') return;
-    setSelectedSeatId(seat.seat_id);
+    if (!selectedSeatIds.includes(seat.seat_id) && selectedSeatIds.length >= MAX_SEATS_PER_CHECKOUT) {
+      setToast({ type: 'info', title: 'Six-seat limit reached', message: 'You can select up to 6 seats per checkout. Deselect one to choose another.' });
+      return;
+    }
+    setSelectedSeatIds(current => toggleSeatId(current, seat.seat_id));
   };
   const openBooking = () => {
-    if (!selectedSeat || !selectedConcert) return;
+    if (!selectedSeats.length || !selectedConcert) return;
     setModalError(''); setModalErrorCode('');
-    setModal({ type: 'confirm', concert: selectedConcert, seat: selectedSeat, key: crypto.randomUUID() });
+    // A different Idempotency-Key per seat; saved inside the modal for safe retries.
+    setModal({ type: 'confirm', concert: selectedConcert, items: createCheckoutItems(selectedSeats), checkoutUserId: userId });
   };
   const confirmBooking = async () => {
-    if (busy || modal?.type !== 'confirm') return;
+    if (busy || !modal || !['confirm', 'batch-result'].includes(modal.type)) return;
     const current = modal;
     setBusy(true); setModalError(''); setModalErrorCode('');
     try {
-      const response = await api.book({ userId, concertId: current.concert.concert_id, seatId: current.seat.seat_id, idempotencyKey: current.key });
-      setModal({ type: 'result', booking: response.data, concert: current.concert, seat: current.seat, replay: response.replay });
-      setSelectedSeatId(null);
+      const updated = await submitCheckoutItems(current.items, api.book, {
+        userId: current.checkoutUserId,
+        concertId: current.concert.concert_id,
+      });
+      setModal({ ...current, type: 'batch-result', items: updated });
+      setSelectedSeatIds([]);
+      // Database state remains authoritative; independently refresh seat/ticket views.
       loadSeats(current.concert.concert_id);
-      loadBookings(userId);
-      setTimeout(() => loadNotifications(userId), 900);
+      loadBookings(current.checkoutUserId);
+      setTimeout(() => loadNotifications(current.checkoutUserId), 900);
       checkServices();
     } catch (err) {
-      setModalError(err.message); setModalErrorCode(err.code);
-      if (err.code === 'SEAT_NOT_AVAILABLE' || err.code === 'SEAT_NOT_FOUND') loadSeats(current.concert.concert_id);
+      // Unexpected frontend error — keep the original keys and items in the modal.
+      setModalError(err?.message || 'Could not finish processing the selected seats.');
       checkServices();
     } finally { setBusy(false); }
   };
@@ -278,7 +372,7 @@ function App() {
               <p className="popover-foot">Notifications are delivered by a separate service and may be delayed.</p>
             </div>}
           </div>
-          <label className="user-select"><Icon name="user" size={16}/><span className="user-text">Demo user</span><select value={userId} aria-label="Choose demo user" onChange={event => { setUserId(Number(event.target.value)); setSelectedSeatId(null); }}><option value={1}>01</option><option value={2}>02</option></select><Icon name="chevron" size={13}/></label>
+          <DemoUserPicker userId={userId} onSelect={id => { setUserId(id); setSelectedSeatIds([]); }}/>
         </div>
       </div>
     </header>
@@ -310,15 +404,25 @@ function App() {
         <section className="booking-section page-width" id="seat-section" ref={seatSectionRef}>
           <div className="section-heading section-heading-book"><div><span className="eyebrow"><span className="tiny-dot"/> YOUR SEAT, YOUR STORY</span><h2>Choose your <em>spot.</em></h2><p>Select a concert above, then choose an available seat below.</p></div></div>
           {!selectedConcert ? <div className="choose-event-state glass-surface"><div className="choose-event-icon"><Icon name="ticket" size={35}/></div><h3>The best nights start with a seat.</h3><p>Select any concert from the lineup to view the live seating chart.</p><button type="button" className="button-outline" onClick={() => document.getElementById('concerts')?.scrollIntoView({behavior:'smooth'})}>Browse the lineup <Icon name="arrow" size={15}/></button></div> :
-          <div className="seat-layout">
-            <div className="seat-map glass-surface">
-              <div className="seat-map-header"><div><span className="eyebrow small">SEAT SELECTION</span><h3>{selectedConcert.concert_name}</h3><p><Icon name="pin" size={14}/> {selectedConcert.venue}</p></div><button type="button" className="small-refresh" onClick={() => loadSeats(selectedConcertId)} aria-label="Refresh seat availability"><Icon name="refresh" size={17}/></button></div>
-              <div className="stage"><div className="stage-gradient"/><span>STAGE</span></div>
-              <div className="seat-legend"><span><i className="seat-available"/> Available</span><span><i className="seat-selected"/> Selected</span><span><i className="seat-taken"/> Unavailable</span></div>
-              {seatLoading ? <div className="seats-status"><div className="spinner"/> Checking current seat availability...</div> : seatError ? <StateView title="Seats unavailable" message={seatError} onRetry={() => loadSeats(selectedConcertId)}/> : seatGroups.length === 0 ? <div className="seats-status">No seats are configured for this concert.</div> : <div className="seat-groups">{seatGroups.map(([group, groupSeats]) => <div className="seat-group" key={group}><div className="seat-group-heading"><span>{group}</span><small>{money(Math.min(...groupSeats.map(s => Number(s.price))))} / seat</small></div><div className="seat-grid">{groupSeats.map(seat => <button key={seat.seat_id} type="button" className={`seat ${seat.status === 'AVAILABLE' ? 'available' : 'unavailable'} ${selectedSeatId === seat.seat_id ? 'picked' : ''}`} disabled={seat.status !== 'AVAILABLE'} onClick={() => selectSeat(seat)} aria-pressed={selectedSeatId === seat.seat_id} title={`${seat.seat_number} • ${seat.status} • ${money(seat.price)}`}>{seat.seat_number}</button>)}</div></div>)}</div>}
-              <div className="seat-map-footer"><Icon name="info" size={15}/><span>{seatLoading ? 'Updating availability' : `${availableCount} seat${availableCount === 1 ? '' : 's'} currently available. Availability may change before confirmation.`}</span></div>
-            </div>
-            <aside className="booking-summary glass-surface"><span className="eyebrow small">YOUR EXPERIENCE</span><h3>Booking summary</h3><div className="summary-divider"/><div className="summary-row"><span>Concert</span><strong>{selectedConcert.concert_name}</strong></div><div className="summary-row"><span>Date & time</span><strong>{fullDate(selectedConcert.concert_date)}<br/>{prettyTime(selectedConcert.concert_time)}</strong></div><div className="summary-row"><span>Seat</span><strong>{selectedSeat ? `${selectedSeat.section || 'General'} · ${selectedSeat.seat_number}` : 'Not selected'}</strong></div><div className="summary-price"><span>Total</span><strong>{selectedSeat ? money(selectedSeat.price) : '—'}</strong></div><GradientButton disabled={!selectedSeat || seatLoading} onClick={openBooking} className="booking-pay">{selectedSeat ? 'Continue to booking' : 'Choose a seat first'}</GradientButton><p className="summary-fineprint"><Icon name="shield" size={14}/> Booking is confirmed only after the server reserves the seat. Demo only — no payment.</p></aside>
+          <div className="seat-layout seat-layout-cinema">
+            <SeatPicker
+              concert={selectedConcert}
+              seats={seats}
+              selectedSeatIds={selectedSeatIds}
+              selectedSeats={selectedSeats}
+              maxSeats={MAX_SEATS_PER_CHECKOUT}
+              onSeatSelect={selectSeat}
+              loading={seatLoading}
+              error={seatError}
+              onRefresh={() => loadSeats(selectedConcertId)}
+              availableCount={availableCount}
+              money={money}
+            />
+            <aside className="booking-summary glass-surface"><span className="eyebrow small">YOUR EXPERIENCE</span><h3>Booking summary</h3><div className="summary-divider"/><div className="summary-row"><span>Concert</span><strong>{selectedConcert.concert_name}</strong></div><div className="summary-row"><span>Date & time</span><strong>{fullDate(selectedConcert.concert_date)}<br/>{prettyTime(selectedConcert.concert_time)}</strong></div><div className="summary-row"><span>Selected seats</span><strong className="seat-count-text">{selectedSeats.length} / {MAX_SEATS_PER_CHECKOUT}</strong></div>
+              {selectedSeats.length > 0 ? <ul className="summary-seats" aria-label="Seats selected for checkout">
+                {selectedSeats.map(seat => <li key={seat.seat_id}><span>{seat.seat_number}</span><span className="summary-seat-actions"><strong>{money(seat.price)}</strong><button type="button" onClick={() => selectSeat(seat)} aria-label={`Remove ${seat.seat_number} from selection`}>×</button></span></li>)}
+              </ul> : <p className="summary-empty">Choose up to six available seats, including seats from different sections.</p>}
+              <div className="summary-price"><span>Total · {selectedSeats.length} seat{selectedSeats.length === 1 ? '' : 's'}</span><strong>{selectedSeats.length ? money(selectedTotal) : '—'}</strong></div><GradientButton disabled={!selectedSeats.length || seatLoading} onClick={openBooking} className="booking-pay">{selectedSeats.length ? `Continue with ${selectedSeats.length} seat${selectedSeats.length === 1 ? '' : 's'}` : 'Choose a seat first'}</GradientButton><p className="summary-fineprint"><Icon name="shield" size={14}/> Booking is confirmed only after the server reserves the seat. Demo only — no payment.</p></aside>
           </div>}
         </section>
       </> : <section className="tickets-page page-width"><div className="tickets-header"><div><span className="eyebrow"><span className="tiny-dot"/> YOUR PERSONAL BACKSTAGE PASS</span><h1>My <span className="gradient-text">tickets.</span></h1><p>Review your reservations, check status and cancel a booking.</p></div><button type="button" className="button-outline" onClick={() => { loadBookings(userId); loadNotifications(userId); }}><Icon name="refresh" size={16}/> Refresh bookings</button></div><div className="account-banner glass-surface"><span className="account-avatar"><Icon name="user" size={21}/></span><div><span className="eyebrow small">DEMO ACCOUNT</span><strong>User {String(userId).padStart(2, '0')}</strong></div><div className="account-stat"><strong>{confirmedCount}</strong><span>ACTIVE TICKETS</span></div></div>
@@ -329,8 +433,42 @@ function App() {
 
     {toast && <div role="status" className={`toast toast-${toast.type || 'info'}`}><Icon name={toast.type === 'success' ? 'check' : 'info'} size={19}/><div><strong>{toast.title}</strong><span>{toast.message}</span></div><button type="button" onClick={() => setToast(null)} aria-label="Dismiss"><Icon name="close" size={15}/></button></div>}
     {modal && <Modal onClose={() => { if (!busy) { setModal(null); setModalError(''); } }}>
-      {modal.type === 'confirm' && <><div className="modal-top-icon"><Icon name="ticket" size={26}/></div><span className="eyebrow small">ONE STEP TO THE SHOW</span><h2>Confirm your seat.</h2><p className="modal-description">Your seat will be reserved through the live Booking and Availability services.</p><div className="modal-receipt"><div><span>Concert</span><strong>{modal.concert.concert_name}</strong></div><div><span>Selected seat</span><strong>{modal.seat.section} / {modal.seat.seat_number}</strong></div><div><span>Demo account</span><strong>User {String(userId).padStart(2,'0')}</strong></div><div className="receipt-total"><span>Total (demo)</span><strong>{money(modal.seat.price)}</strong></div></div>{modalError && <div className="modal-error" role="alert"><Icon name="alert" size={18}/>{modalError}</div>}<GradientButton className="modal-primary" disabled={busy} onClick={() => { if (modalError && !['NETWORK_ERROR','TIMEOUT','AVAILABILITY_SERVICE_UNAVAILABLE','RECOVERY_IN_PROGRESS','REQUEST_IN_PROGRESS','SERVICE_UNAVAILABLE','DATABASE_UNAVAILABLE'].includes(modalErrorCode)) { setModal(null); setSelectedSeatId(null); loadSeats(modal.concert.concert_id); } else confirmBooking(); }}>{busy ? 'Contacting booking service...' : modalError && !['NETWORK_ERROR','TIMEOUT','AVAILABILITY_SERVICE_UNAVAILABLE','RECOVERY_IN_PROGRESS','REQUEST_IN_PROGRESS','SERVICE_UNAVAILABLE','DATABASE_UNAVAILABLE'].includes(modalErrorCode) ? 'Choose another seat' : modalError ? 'Retry safely' : 'Confirm booking'}</GradientButton><p className="modal-footnote">Retries reuse the same request key to prevent duplicate bookings.</p></>}
-      {modal.type === 'result' && <><div className="modal-top-icon result-success"><Icon name="check" size={28}/></div><span className="eyebrow small">YOU'RE ON THE LIST</span><h2>It's official.</h2><p className="modal-description">Your booking has been confirmed by the server. See you at the show!</p><div className="result-badge">{modal.booking.status}</div><div className="modal-receipt"><div><span>Booking reference</span><strong className="reference-number">{modal.booking.booking_id}</strong></div><div><span>Concert</span><strong>{modal.concert.concert_name}</strong></div><div><span>Seat</span><strong>{modal.seat.seat_number}</strong></div><div><span>Notification</span><strong>{modal.booking.notification_status || 'Processing'}</strong></div></div>{modal.replay && <p className="replay-note">An existing booking was returned safely using your original request key.</p>}<GradientButton className="modal-primary" onClick={() => { setModal(null); navigate('tickets'); }}>View my tickets</GradientButton><button className="text-action" type="button" onClick={() => setModal(null)}>Back to concerts</button></>}
+      {modal.type === 'confirm' && <>
+        <div className="modal-top-icon"><Icon name="ticket" size={26}/></div>
+        <span className="eyebrow small">ONE STEP TO THE SHOW</span>
+        <h2>Confirm your seats.</h2>
+        <p className="modal-description">You're booking {modal.items.length} seat{modal.items.length === 1 ? '' : 's'}. Each seat creates its own booking reference. Some seats may succeed while others are rejected.</p>
+        <div className="modal-receipt">
+          <div><span>Concert</span><strong>{modal.concert.concert_name}</strong></div>
+          <div><span>Demo account</span><strong>User {String(modal.checkoutUserId).padStart(2, '0')}</strong></div>
+          {modal.items.map(item => <div key={item.seat.seat_id}><span>{item.seat.seat_number}</span><strong>{money(item.seat.price)}</strong></div>)}
+          <div className="receipt-total"><span>Total (demo)</span><strong>{money(modal.items.reduce((sum,item)=>sum+Number(item.seat.price||0),0))}</strong></div>
+        </div>
+        {modalError && <div className="modal-error" role="alert"><Icon name="alert" size={18}/>{modalError}</div>}
+        <GradientButton className="modal-primary" disabled={busy} onClick={confirmBooking}>{busy ? 'Processing seat requests...' : `Confirm ${modal.items.length} seat${modal.items.length === 1 ? '' : 's'}`}</GradientButton>
+        <p className="modal-footnote">Each seat uses its own idempotency key. This checkout is not all-or-nothing.</p>
+      </>}
+      {modal.type === 'batch-result' && (() => {
+        const counts = checkoutCounts(modal.items);
+        const stillUncertain = counts.uncertain + counts.pending > 0;
+        return <>
+          <div className={`modal-top-icon ${counts.confirmed ? 'result-success' : 'warning-icon'}`}><Icon name={counts.confirmed ? 'check' : 'alert'} size={26}/></div>
+          <span className="eyebrow small">BOOKING RESULTS</span>
+          <h2>{counts.confirmed === modal.items.length ? 'Seats secured!' : 'Your seat results.'}</h2>
+          <p className="modal-description">{counts.confirmed} confirmed · {counts.rejected} rejected · {counts.uncertain + counts.pending} need checking. Each seat is handled independently.</p>
+          <div className="multi-booking-results" role="status" aria-live="polite">
+            {modal.items.map(item => <div className={`multi-booking-item result-${item.state}`} key={item.seat.seat_id}>
+              <span className="multi-result-status">{item.state === 'confirmed' ? '✓' : item.state === 'rejected' ? '×' : '?'}</span>
+              <div><strong>{item.seat.seat_number}</strong><small>{item.state === 'confirmed' ? `CONFIRMED · ${item.booking?.booking_id || 'Reference pending'}` : item.state === 'rejected' ? `REJECTED · ${item.error?.message || 'Unavailable'}` : `UNCERTAIN · ${item.error?.message || 'Awaiting booking response'}`}</small>{item.replay && <small>Safely returned existing booking</small>}</div>
+              <b>{money(item.seat.price)}</b>
+            </div>)}
+          </div>
+          {modalError && <div className="modal-error" role="alert"><Icon name="alert" size={18}/>{modalError}</div>}
+          {stillUncertain && <><p className="multi-retry-note">A timeout doesn't prove the booking failed. Retry only uncertain seats using their original keys, or check My Tickets before starting another checkout.</p><GradientButton className="modal-primary" disabled={busy} onClick={confirmBooking} icon="refresh">{busy ? 'Checking uncertain seats...' : `Retry ${counts.uncertain + counts.pending} uncertain seat${counts.uncertain + counts.pending === 1 ? '' : 's'} safely`}</GradientButton></>}
+          <button className="text-action" type="button" disabled={busy} onClick={() => { setModal(null); navigate('tickets'); }}>View my tickets</button>
+          <button className="text-action" type="button" disabled={busy} onClick={() => { setModal(null); loadSeats(modal.concert.concert_id); }}>Choose more seats</button>
+        </>;
+      })()}
       {modal.type === 'cancel' && <><div className="modal-top-icon warning-icon"><Icon name="alert" size={26}/></div><span className="eyebrow small">BOOKING MANAGEMENT</span><h2>Cancel this ticket?</h2><p className="modal-description">This action will cancel booking <strong>{modal.booking.booking_id}</strong>. Your seat will be released by the availability service.</p><div className="modal-receipt"><div><span>Concert</span><strong>{modal.concert?.concert_name || `Concert #${modal.booking.concert_id}`}</strong></div><div><span>Booking status</span><strong>{modal.booking.status}</strong></div></div>{modalError && <div className="modal-error" role="alert"><Icon name="alert" size={18}/>{modalError}</div>}<button type="button" className="danger-button" disabled={busy} onClick={cancelBooking}>{busy ? 'Cancelling...' : 'Yes, cancel this ticket'}</button><button type="button" className="text-action" onClick={() => setModal(null)} disabled={busy}>Keep my booking</button></>}
     </Modal>}
   </div>;
