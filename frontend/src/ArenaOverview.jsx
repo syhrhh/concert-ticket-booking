@@ -1,7 +1,7 @@
 import { buildArenaPieces, sectionAvailable } from './arenaLayout.mjs';
 
 /** Overview is a navigational schematic. Actual inventory always comes from the API. */
-export default function ArenaOverview({ zones, money, onSelect, selectedSeat }) {
+export default function ArenaOverview({ zones, money, onSelect, selectedSeats = [] }) {
   const pieces = buildArenaPieces(zones);
   return <div className="arena-overview" data-testid="arena-overview">
     <div className="arena-intro">
@@ -47,7 +47,7 @@ export default function ArenaOverview({ zones, money, onSelect, selectedSeat }) 
         const price = zone.prices.length === 1 ? money(zone.prices[0]) : zone.prices.length > 1 ? `From ${money(zone.prices[0])}` : 'Price TBA';
         return <button type="button" key={zone.section} className="arena-section-card" onClick={() => onSelect(zone.section)}>
           <span className="arena-section-swatch" style={{ background: pieces[i].color }}/>
-          <span className="arena-section-detail"><strong>{zone.section}</strong><small>{available} of {zone.seatCount} seats available {selectedSeat?.section === zone.section ? '· Your selection' : ''}</small></span>
+          <span className="arena-section-detail"><strong>{zone.section}</strong><small>{available} of {zone.seatCount} seats available {selectedSeats.some(seat => seat.section === zone.section) ? ` · ${selectedSeats.filter(seat => seat.section === zone.section).length} selected` : ''}</small></span>
           <span className="arena-section-price">{price}</span><span className="arena-section-arrow" aria-hidden="true">↗</span>
         </button>;
       })}
