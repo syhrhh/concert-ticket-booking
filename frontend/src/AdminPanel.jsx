@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import Dropdown from './Dropdown';
 import './admin.css';
 
 const TOKEN_KEY = 'encore_admin_token';
@@ -77,12 +78,11 @@ function SeatManager({ token, concerts, onChanged }) {
   return <div className="admin-card glass-surface">
     <div className="admin-filters">
       <h3>Seat control</h3>
-      <select value={concertId} onChange={e => { setConcertId(e.target.value); setSection(''); }} aria-label="Concert">
-        {concerts.map(c => <option key={c.concert_id} value={c.concert_id}>{c.concert_name}</option>)}
-      </select>
-      <select value={active} onChange={e => setSection(e.target.value)} aria-label="Section">
-        {sections.map(sec => <option key={sec} value={sec}>Section {sec}</option>)}
-      </select>
+      <Dropdown ariaLabel="Concert" caption="Choose concert" value={concertId} minWidth={190}
+        options={concerts.map(c => ({ value: c.concert_id, label: c.concert_name }))}
+        onChange={v => { setConcertId(v); setSection(''); }} />
+      <Dropdown ariaLabel="Section" caption="Choose section" value={active} minWidth={150}
+        options={sections.map(sec => ({ value: sec, label: `Section ${sec}` }))} onChange={setSection} />
       <button type="button" className="admin-ghost" disabled={busy || !active} onClick={() => run(() => api.adminSectionAction(token, concertId, active, 'block'))}>Block section</button>
       <button type="button" className="admin-ghost" disabled={busy || !active} onClick={() => run(() => api.adminSectionAction(token, concertId, active, 'unblock'))}>Unblock section</button>
     </div>
@@ -188,12 +188,12 @@ function Dashboard({ token, admin, onLogout }) {
     <div className="admin-card glass-surface">
       <div className="admin-filters">
         <h3>All bookings</h3>
-        <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))} aria-label="Filter by status">
-          <option value="">All statuses</option>{STATUSES.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select value={filters.concertId} onChange={e => setFilters(f => ({ ...f, concertId: e.target.value }))} aria-label="Filter by concert">
-          <option value="">All concerts</option>{(stats?.concerts || []).map(c => <option key={c.concert_id} value={c.concert_id}>{c.concert_name}</option>)}
-        </select>
+        <Dropdown ariaLabel="Filter by status" caption="Booking status" value={filters.status} minWidth={160}
+          options={[{ value: '', label: 'All statuses' }, ...STATUSES.map(st => ({ value: st, label: st }))]}
+          onChange={v => setFilters(f => ({ ...f, status: v }))} />
+        <Dropdown ariaLabel="Filter by concert" caption="Concert" value={filters.concertId} minWidth={170}
+          options={[{ value: '', label: 'All concerts' }, ...(stats?.concerts || []).map(c => ({ value: c.concert_id, label: c.concert_name }))]}
+          onChange={v => setFilters(f => ({ ...f, concertId: v }))} />
         <input type="search" placeholder="Search booking ID, name or e-mail" value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value }))} />
       </div>
       {loading ? <p className="admin-muted">Loading bookings...</p> : bookings.length === 0 ? <p className="admin-muted">No bookings match.</p> :

@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     db.init_pool()
     db.run_sql_file("001_booking_schema.sql")
     db.run_sql_file("002_admin_auth.sql")
+    db.run_sql_file("003_neutral_seed_names.sql")
     auth.ensure_admin()
     auth.ensure_demo_customers()
     if config.SEED_DEMO_DATA:
