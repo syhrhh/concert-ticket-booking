@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import SeatPicker from './SeatPicker';
 import AdminPanel from './AdminPanel';
+import LoginPage from './LoginPage';
 import { MAX_SEATS_PER_CHECKOUT, toggleSeatId, reconcileSeatIds, createCheckoutItems, submitCheckoutItems, checkoutCounts } from './multiSeatBooking.mjs';
 
 const ICONS = {
@@ -114,92 +115,7 @@ function Modal({ children, onClose, wide = false }) {
   </div>;
 }
 
-/** Rounded, keyboard-accessible demo-account picker. The selected user is still
- * managed by App, so existing booking / notification API behavior is unchanged. */
-function DemoUserPicker({ userId, onSelect }) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef(null);
-  const triggerRef = useRef(null);
-  const optionRefs = useRef([]);
-  const users = [1, 2];
-
-  useEffect(() => {
-    if (!open) return;
-    const onOutsideClick = event => {
-      if (!containerRef.current?.contains(event.target)) setOpen(false);
-    };
-    const onEscape = event => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', onOutsideClick);
-    document.addEventListener('keydown', onEscape);
-    return () => {
-      document.removeEventListener('pointerdown', onOutsideClick);
-      document.removeEventListener('keydown', onEscape);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (open) optionRefs.current[users.indexOf(userId)]?.focus();
-  }, [open, userId]);
-
-  const pickUser = id => {
-    onSelect(id);
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  const handleOptionKeyDown = (event, index) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      const nextIndex = (index + (event.key === 'ArrowDown' ? 1 : -1) + users.length) % users.length;
-      optionRefs.current[nextIndex]?.focus();
-    } else if (event.key === 'Home' || event.key === 'End') {
-      event.preventDefault();
-      optionRefs.current[event.key === 'Home' ? 0 : users.length - 1]?.focus();
-    }
-  };
-
-  return <div className="demo-user-picker" ref={containerRef}>
-    <button
-      type="button"
-      className={`user-select user-select-trigger ${open ? 'is-open' : ''}`}
-      aria-haspopup="menu"
-      aria-expanded={open}
-      aria-controls="demo-account-menu"
-      aria-label={`Demo user ${String(userId).padStart(2, '0')}. Choose demo user`}
-      onClick={() => setOpen(value => !value)}
-      ref={triggerRef}
-    >
-      <Icon name="user" size={16}/>
-      <span className="user-text">Demo user</span>
-      <span className="user-number">{String(userId).padStart(2, '0')}</span>
-      <Icon name="chevron" size={13} className="user-chevron"/>
-    </button>
-    {open && <div className="demo-user-menu" role="menu" aria-label="Demo accounts" id="demo-account-menu">
-      <span className="demo-user-menu-caption">SWITCH DEMO USER</span>
-      {users.map((id, index) => <button
-        type="button"
-        key={id}
-        ref={element => { optionRefs.current[index] = element; }}
-        className={`demo-user-option ${userId === id ? 'is-active' : ''}`}
-        role="menuitemradio"
-        aria-checked={userId === id}
-        onClick={() => pickUser(id)}
-        onKeyDown={event => handleOptionKeyDown(event, index)}
-      >
-        <span className="demo-user-option-icon"><Icon name="user" size={15}/></span>
-        <span>Demo user {String(id).padStart(2, '0')}</span>
-        {userId === id && <Icon name="check" size={16} className="demo-user-option-check"/>}
-      </button>)}
-    </div>}
-  </div>;
-}
-
-function App() {
+function App({ user, onLogout }) {
   const [page, setPage] = useState('discover');
   const [concerts, setConcerts] = useState([]);
   const [loadingConcerts, setLoadingConcerts] = useState(true);
@@ -211,10 +127,7 @@ function App() {
   const [seatsByConcert, setSeatsByConcert] = useState({});
   const [seatLoading, setSeatLoading] = useState(false);
   const [seatError, setSeatError] = useState('');
-  const [userId, setUserId] = useState(() => {
-    const stored = localStorage.getItem('encore.demoUser');
-    return stored === '2' ? 2 : 1;
-  });
+  const userId = user.user_id; // the signed-in customer (set by the login page)
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState('');
@@ -231,7 +144,6 @@ function App() {
   const seatSectionRef = useRef(null);
   const notificationPanelRef = useRef(null);
 
-  useEffect(() => { localStorage.setItem('encore.demoUser', String(userId)); }, [userId]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 4800); return () => clearTimeout(t); }, [toast]);
   useEffect(() => {
     function closeOnOutside(event) { if (notificationPanelRef.current && !notificationPanelRef.current.contains(event.target)) setNoticeOpen(false); }
@@ -394,7 +306,6 @@ function App() {
         <nav className="nav-links" aria-label="Main navigation">
           <button type="button" className={page === 'discover' ? 'active' : ''} onClick={() => navigate('discover')}>Discover</button>
           <button type="button" className={page === 'tickets' ? 'active' : ''} onClick={() => navigate('tickets')}>My tickets <span className="ticket-count">{confirmedCount}</span></button>
-          <button type="button" className={page === 'admin' ? 'active' : ''} onClick={() => navigate('admin')}>Staff</button>
         </nav>
         <div className="header-actions">
           <StatusPill statuses={statuses}/>
@@ -406,13 +317,13 @@ function App() {
               <p className="popover-foot">Notifications are delivered by a separate service and may be delayed.</p>
             </div>}
           </div>
-          <DemoUserPicker userId={userId} onSelect={id => { setUserId(id); setSelectedSeatIds([]); }}/>
+          <button type="button" className="user-select user-select-trigger account-chip" onClick={onLogout} title={`Signed in as ${user.email}. Click to sign out.`} aria-label={`Signed in as ${user.name}. Sign out`}><Icon name="user" size={16}/><span className="user-text">{user.name}</span><span className="user-number">Sign out</span></button>
         </div>
       </div>
     </header>
 
     <main>
-      {page === 'admin' ? <AdminPanel/> : page === 'discover' ? <>
+      {page === 'discover' ? <>
         <section className="hero page-width">
           <div className="hero-copy">
             <div className="hero-kicker"><span className="hero-kicker-line"/> YOUR FRONT ROW STARTS HERE</div>
@@ -508,4 +419,34 @@ function App() {
   </div>;
 }
 
-export default App;
+const SESSION_KEY = 'encore_session';
+const readSession = () => { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; } };
+const writeSession = value => { try { value ? sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)) : sessionStorage.removeItem(SESSION_KEY); } catch { /* storage blocked: stays signed in until refresh */ } };
+
+/** Login gate: nothing else is shown until someone signs in. A customer gets the
+ * booking site, a staff account gets the admin console. */
+export default function Root() {
+  const [session, setSession] = useState(readSession);
+  const [notice, setNotice] = useState('');
+  const [checking, setChecking] = useState(Boolean(readSession()));
+
+  // A saved session is re-checked with the server (token may have expired).
+  useEffect(() => {
+    const saved = readSession();
+    if (!saved) { setChecking(false); return; }
+    api.me(saved.token).then(({ data }) => setSession({ token: saved.token, user: data }))
+      .catch(() => { writeSession(null); setSession(null); }).finally(() => setChecking(false));
+  }, []);
+
+  const login = value => { writeSession(value); setNotice(''); setSession(value); window.scrollTo({ top: 0 }); };
+  const logout = message => { writeSession(null); setSession(null); setNotice(typeof message === 'string' ? message : 'You have been signed out.'); };
+
+  if (checking) return <div className="login-shell"><p className="admin-muted">Checking your session...</p></div>;
+  if (!session) return <LoginPage onLogin={login} notice={notice}/>;
+  if (session.user.role === 'ADMIN') return <div className="app-shell">
+    <div className="background-glow bg-glow-one"/><div className="background-glow bg-glow-two"/>
+    <div className="page-width admin-topbar"><Logo onClick={() => {}}/><span className="admin-muted">Staff console · {session.user.email}</span></div>
+    <AdminPanel session={session} onLogout={logout}/>
+  </div>;
+  return <App key={session.user.user_id} user={session.user} onLogout={() => logout()}/>;
+}

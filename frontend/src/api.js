@@ -39,6 +39,9 @@ const friendlyErrors = {
   INVALID_TOKEN: 'Your staff session has expired. Please sign in again.',
   SEAT_NOT_BLOCKED: 'Only a blocked seat can be put back on sale.',
   SECTION_NOT_FOUND: 'That section does not exist.',
+  EMAIL_TAKEN: 'An account with this e-mail already exists. Try signing in instead.',
+  INVALID_EMAIL: 'Please enter a valid e-mail address.',
+  INVALID_NAME: 'Please enter your name.',
   ADMIN_ONLY: 'This area is for staff accounts only.',
 };
 
@@ -94,6 +97,9 @@ export const api = {
   health: (service) => request(service, '/health', { timeout: 4000 }),
   dependencies: () => request('booking', '/health/dependencies', { timeout: 5000 }),
 
+  login: (email, password) => request('booking', '/api/auth/login', { method: 'POST', body: { email, password } }),
+  register: (name, email, password) => request('booking', '/api/auth/register', { method: 'POST', body: { name, email, password } }),
+  me: (token) => request('booking', '/api/auth/me', { headers: bearer(token) }),
   // ---- staff / admin (JWT in the Authorization header) ----
   adminLogin: (email, password) => request('booking', '/api/admin/login', { method: 'POST', body: { email, password } }),
   adminMe: (token) => request('booking', '/api/admin/me', { headers: bearer(token) }),

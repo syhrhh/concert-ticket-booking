@@ -84,3 +84,17 @@ def ensure_admin() -> None:
             conn.execute("UPDATE users SET role = 'ADMIN' WHERE user_id = %s", (row["user_id"],))
     if config.JWT_SECRET == config.DEFAULT_JWT_SECRET:
         log.warning("JWT_SECRET is the development default - set a real secret outside local demos")
+
+
+def ensure_demo_customers() -> None:
+    """Give the seeded demo customers (user.a@ / user.b@example.com) a real hashed
+    password so they can sign in. Only replaces the placeholder hash from init.sql."""
+    with db.pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT user_id FROM users WHERE email IN ('user.a@example.com', 'user.b@example.com')"
+            " AND password_hash NOT LIKE 'pbkdf2_sha256$%'").fetchall()
+        for row in rows:
+            conn.execute("UPDATE users SET password_hash = %s WHERE user_id = %s",
+                         (hash_password(config.DEMO_CUSTOMER_PASSWORD), row["user_id"]))
+        if rows:
+            log.info("set demo password for %d demo customer(s)", len(rows))

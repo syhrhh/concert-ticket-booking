@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 -- Demo users so Booking Service inserts satisfy bookings.user_id FK.
--- Placeholder hashes only; Booking Service must not treat these as real logins.
+-- Placeholder hashes only: on start-up Booking Service replaces them with a real
+-- PBKDF2 hash of the demo password (auth.ensure_demo_customers), so these two can sign in.
 INSERT INTO users (user_id, name, email, password_hash)
 VALUES
     (1, 'Demo User A', 'user.a@example.com', 'demo-placeholder-not-a-real-hash'),

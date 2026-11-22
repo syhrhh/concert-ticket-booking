@@ -217,7 +217,13 @@ function Dashboard({ token, admin, onLogout }) {
   </section>;
 }
 
-export default function AdminPanel() {
+export default function AdminPanel({ session, onLogout }) {
+  // Signed in through the main login page: show the dashboard straight away.
+  if (session) return <Dashboard token={session.token} admin={session.user} onLogout={message => onLogout?.(message)} />;
+  return <StandaloneAdmin />;
+}
+
+function StandaloneAdmin() {
   const [token, setToken] = useState(readToken);
   const [admin, setAdmin] = useState(null);
   const [checking, setChecking] = useState(Boolean(readToken()));

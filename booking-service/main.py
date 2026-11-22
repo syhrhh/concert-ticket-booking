@@ -24,6 +24,7 @@ import auth
 import clients
 import config
 import db
+import login
 import outbox
 import service
 
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
     db.run_sql_file("001_booking_schema.sql")
     db.run_sql_file("002_admin_auth.sql")
     auth.ensure_admin()
+    auth.ensure_demo_customers()
     if config.SEED_DEMO_DATA:
         db.run_sql_file("demo_seed.sql")
     outbox.worker.start()
@@ -61,6 +63,7 @@ app.add_middleware(
 
 
 app.include_router(admin.router)
+app.include_router(login.router)
 
 
 class BookingRequest(BaseModel):

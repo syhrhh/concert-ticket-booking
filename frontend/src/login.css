@@ -1,0 +1,18 @@
+.login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;position:relative}
+.login-card{position:relative;width:100%;max-width:440px;border-radius:24px;padding:32px;display:flex;flex-direction:column;gap:14px}
+.login-brand{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.login-card h1{margin:0;font-size:2rem}
+.login-card label{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted)}
+.login-card input{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;color:inherit;padding:12px 14px;font:inherit}
+.login-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:rgba(255,255,255,.06);padding:5px;border-radius:999px}
+.login-tabs button{background:transparent;border:0;color:var(--muted);padding:9px;border-radius:999px;font:inherit;cursor:pointer}
+.login-tabs button.active{background:var(--grad);color:#14110f;font-weight:700}
+.login-demo{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted)}
+.login-demo button{display:flex;flex-direction:column;gap:2px;text-align:left;background:rgba(255,255,255,.05);border:1px dashed var(--border);border-radius:12px;padding:9px 12px;color:inherit;font:inherit;cursor:pointer}
+.login-demo button:hover{background:rgba(255,255,255,.1)}
+.login-demo b{font-size:.85rem}
+.account-chip{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.admin-topbar{display:flex;justify-content:space-between;align-items:center;padding-top:18px;padding-bottom:6px}
+.login-switch{margin:0;text-align:center;font-size:.88rem;color:var(--muted)}
+.login-switch button{background:none;border:0;color:#f4a07e;font:inherit;font-weight:700;cursor:pointer;padding:0}
+.login-card label small{color:var(--muted);font-size:.75rem}
