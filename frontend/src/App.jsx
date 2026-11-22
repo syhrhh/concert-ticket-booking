@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import SeatPicker from './SeatPicker';
+import AdminPanel from './AdminPanel';
 import { MAX_SEATS_PER_CHECKOUT, toggleSeatId, reconcileSeatIds, createCheckoutItems, submitCheckoutItems, checkoutCounts } from './multiSeatBooking.mjs';
 
 const ICONS = {
@@ -226,6 +227,7 @@ function App() {
   const [modalErrorCode, setModalErrorCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const seenNoticeIds = useRef(null); // notification ids already shown; null = not loaded yet for this user
   const seatSectionRef = useRef(null);
   const notificationPanelRef = useRef(null);
 
@@ -263,7 +265,19 @@ function App() {
   }, []);
   const loadNotifications = useCallback(async id => {
     setNotificationsError('');
-    try { const { data } = await api.notifications(id); setNotifications(Array.isArray(data) ? data : []); }
+    try {
+      const { data } = await api.notifications(id);
+      const list = Array.isArray(data) ? data : [];
+      setNotifications(list);
+      // Pop-up: the first load only records what already exists; later loads toast anything new.
+      const seen = seenNoticeIds.current;
+      if (seen === null) seenNoticeIds.current = new Set(list.map(n => n.notification_id));
+      else {
+        const fresh = list.filter(n => !seen.has(n.notification_id));
+        fresh.forEach(n => seen.add(n.notification_id));
+        if (fresh.length) setToast({ type: 'success', title: fresh.length > 1 ? `${fresh.length} new notifications` : 'New notification', message: fresh[fresh.length - 1].message });
+      }
+    }
     catch (err) { setNotificationsError(err.message); setNotifications([]); }
   }, []);
   const checkServices = useCallback(async () => {
@@ -274,8 +288,27 @@ function App() {
   }, []);
 
   useEffect(() => { loadConcerts(); checkServices(); }, [loadConcerts, checkServices]);
-  useEffect(() => { loadBookings(userId); loadNotifications(userId); }, [userId, loadBookings, loadNotifications]);
+  useEffect(() => { seenNoticeIds.current = null; loadBookings(userId); loadNotifications(userId); }, [userId, loadBookings, loadNotifications]);
+  // Check for new notifications every 5 s so the pop-up appears without clicking the bell.
+  useEffect(() => {
+    if (page === 'admin') return undefined;
+    const timer = setInterval(() => loadNotifications(userId), 5000);
+    return () => clearInterval(timer);
+  }, [userId, page, loadNotifications]);
   useEffect(() => { if (selectedConcertId) loadSeats(selectedConcertId); }, [selectedConcertId, loadSeats]);
+  // Quietly re-check seats every 5 s so seats blocked/booked elsewhere (e.g. by staff) update on screen.
+  useEffect(() => {
+    if (!selectedConcertId || page !== 'discover') return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const { data } = await api.seats(selectedConcertId);
+        if (!Array.isArray(data)) return;
+        setSeatsByConcert(prev => ({ ...prev, [selectedConcertId]: data }));
+        setSelectedSeatIds(prev => reconcileSeatIds(prev, data));
+      } catch { /* keep showing the last known seats */ }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [selectedConcertId, page]);
 
   const filteredConcerts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -361,6 +394,7 @@ function App() {
         <nav className="nav-links" aria-label="Main navigation">
           <button type="button" className={page === 'discover' ? 'active' : ''} onClick={() => navigate('discover')}>Discover</button>
           <button type="button" className={page === 'tickets' ? 'active' : ''} onClick={() => navigate('tickets')}>My tickets <span className="ticket-count">{confirmedCount}</span></button>
+          <button type="button" className={page === 'admin' ? 'active' : ''} onClick={() => navigate('admin')}>Staff</button>
         </nav>
         <div className="header-actions">
           <StatusPill statuses={statuses}/>
@@ -378,7 +412,7 @@ function App() {
     </header>
 
     <main>
-      {page === 'discover' ? <>
+      {page === 'admin' ? <AdminPanel/> : page === 'discover' ? <>
         <section className="hero page-width">
           <div className="hero-copy">
             <div className="hero-kicker"><span className="hero-kicker-line"/> YOUR FRONT ROW STARTS HERE</div>
