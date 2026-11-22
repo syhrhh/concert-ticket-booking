@@ -275,6 +275,6 @@ def test_bad_idempotency_key_and_ids_are_rejected(stack):
 
 def test_unknown_references_give_404(stack):
     assert stack.book(user_id=999, seat_id=1, key=new_key()).json()["detail"] == "USER_NOT_FOUND"
-    assert stack.book(user_id=1, seat_id=999, key=new_key()).json()["detail"] == "SEAT_NOT_FOUND"
+    assert stack.book(user_id=1, seat_id=2_000_000_000, key=new_key()).json()["detail"] == "SEAT_NOT_FOUND"
     assert stack.book(user_id=1, seat_id=1, concert_id=999, key=new_key()).json()["detail"] == "CONCERT_NOT_FOUND"
     assert stack.query("SELECT count(*) FROM bookings") == [(0,)]

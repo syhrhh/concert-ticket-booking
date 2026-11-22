@@ -1,0 +1,28 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\HAAKSHAN\Documents\concert-ticket-booking\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\HAAKSHAN\Documents\concert-ticket-booking
+plugins: anyio-4.16.0
+collecting ... collected 19 items
+
+tests/test_notification_service.py::test_health_reports_database PASSED  [  5%]
+tests/test_notification_service.py::test_notification_is_stored_and_listed PASSED [ 10%]
+tests/test_notification_service.py::test_retry_with_same_key_returns_original PASSED [ 15%]
+tests/test_notification_service.py::test_ten_simultaneous_copies_create_one_notification PASSED [ 21%]
+tests/test_notification_service.py::test_same_key_for_a_different_message_is_refused PASSED [ 26%]
+tests/test_notification_service.py::test_confirmation_and_cancellation_are_separate_notifications PASSED [ 31%]
+tests/test_notification_service.py::test_notifications_survive_a_restart PASSED [ 36%]
+tests/test_notification_service.py::test_users_only_see_their_own_notifications PASSED [ 42%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body0] PASSED [ 47%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body1] PASSED [ 52%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body2] PASSED [ 57%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body3] PASSED [ 63%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body4] PASSED [ 68%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body5] PASSED [ 73%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body6] PASSED [ 78%]
+tests/test_notification_service.py::test_invalid_input_is_rejected[body7] PASSED [ 84%]
+tests/test_notification_service.py::test_bad_idempotency_key_and_user_id_are_rejected PASSED [ 89%]
+tests/test_notification_service.py::test_fault_mode_error_returns_503_and_stores_nothing PASSED [ 94%]
+tests/test_notification_service.py::test_fault_mode_slow_saves_first_then_replies_late PASSED [100%]
+
+============================= 19 passed in 46.91s =============================

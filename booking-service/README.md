@@ -14,15 +14,16 @@ docker compose up -d postgres
 # 2. This service
 cd booking-service
 pip install -r requirements.txt
-SEED_DEMO_DATA=true uvicorn main:app --port 5001 --reload
+uvicorn main:app --port 5001 --reload
 ```
 
 No Docker? Use any local PostgreSQL: create the login and database from
 `docker-compose.yml` (`concert_user` / `concert_pass`, database `concert_booking`), load
 `database/init.sql`, or set `DATABASE_URL` to your own.
 
-`SEED_DEMO_DATA=true` inserts demo users 1-10, concert 1 and seats 1-3 (the seats the
-Availability Service currently exposes). Leave it off once real data exists.
+The team's `database/init.sql` already seeds demo users 1-2, concerts and seats, so the
+service runs without extra seeding. `SEED_DEMO_DATA=true` is optional: it only adds users
+3-10 (and seats 1-3 if they are missing); the automated tests use it for their own database.
 On start-up the service applies `sql/001_booking_schema.sql` (additive and repeatable; it
 never edits `database/init.sql`).
 
@@ -114,7 +115,7 @@ sequenceDiagram
 
 **Frontend**: send a fresh UUID in `Idempotency-Key` for each booking attempt and reuse it on a retry; use `?user_id=` when cancelling; send only `user_id, concert_id, seat_id`; show the `detail` codes and the `notification_status` / `seat_release_status` fields.
 
-**Database**: `bookings` must allow the statuses `PENDING, CONFIRMED, REJECTED, FAILED, CANCELLED`. If `init.sql` defines a narrower check, the start-up migration replaces it. `user_id`, `concert_id` and `seat_id` must exist (foreign keys); use `SEED_DEMO_DATA=true` for development or seed data in `init.sql`.
+**Database**: `bookings` must allow the statuses `PENDING, CONFIRMED, REJECTED, FAILED, CANCELLED`. If `init.sql` defines a narrower check, the start-up migration replaces it. `user_id`, `concert_id` and `seat_id` must exist (foreign keys); `init.sql` seeds users 1-2 and the seats; add more users there (or use `SEED_DEMO_DATA=true`) if you need them.
 
 ## Tests
 
