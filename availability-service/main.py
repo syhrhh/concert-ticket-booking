@@ -152,6 +152,69 @@ def seat_availability(concert_id: Annotated[int, Path(gt=0)], seat_id: Annotated
     return {"available": seat["status"] == "AVAILABLE", "seat": serialize_seat(seat)}
 
 
+# --------------------------------------------------------------------------
+# Staff controls: take a seat (or a whole section) off sale, or put it back.
+# Called by the Booking Service admin API. BLOCKED seats are shown to customers
+# as unavailable and are rejected by reserve_seat (status != AVAILABLE).
+# --------------------------------------------------------------------------
+@app.put("/api/concerts/{concert_id}/seats/{seat_id}/block")
+def block_seat(concert_id: Annotated[int, Path(gt=0)], seat_id: Annotated[int, Path(gt=0)]):
+    return _set_seat_blocked(concert_id, seat_id, blocked=True)
+
+
+@app.put("/api/concerts/{concert_id}/seats/{seat_id}/unblock")
+def unblock_seat(concert_id: Annotated[int, Path(gt=0)], seat_id: Annotated[int, Path(gt=0)]):
+    return _set_seat_blocked(concert_id, seat_id, blocked=False)
+
+
+def _set_seat_blocked(concert_id: int, seat_id: int, blocked: bool):
+    with engine.begin() as conn:
+        seat = conn.execute(
+            text("SELECT seat_id, status FROM seats WHERE concert_id = :c AND seat_id = :s FOR UPDATE"),
+            {"c": concert_id, "s": seat_id},
+        ).mappings().first()
+        if seat is None:
+            api_error(404, "SEAT_NOT_FOUND", "This seat does not exist for the selected concert.")
+        target, source = ("BLOCKED", "AVAILABLE") if blocked else ("AVAILABLE", "BLOCKED")
+        if seat["status"] == target:
+            return {"seat_id": seat_id, "status": target, "changed": False}  # idempotent
+        if seat["status"] != source:
+            if blocked:
+                api_error(409, "SEAT_NOT_AVAILABLE",
+                          "The seat is reserved or booked. Cancel the booking before blocking it.")
+            api_error(409, "SEAT_NOT_BLOCKED", "Only a blocked seat can be put back on sale.")
+        conn.execute(text("UPDATE seats SET status = :t WHERE seat_id = :s"), {"t": target, "s": seat_id})
+    return {"seat_id": seat_id, "status": target, "changed": True}
+
+
+@app.put("/api/concerts/{concert_id}/sections/{section}/block")
+def block_section(concert_id: Annotated[int, Path(gt=0)], section: Annotated[str, Path(max_length=50)]):
+    return _set_section_blocked(concert_id, section, blocked=True)
+
+
+@app.put("/api/concerts/{concert_id}/sections/{section}/unblock")
+def unblock_section(concert_id: Annotated[int, Path(gt=0)], section: Annotated[str, Path(max_length=50)]):
+    return _set_section_blocked(concert_id, section, blocked=False)
+
+
+def _set_section_blocked(concert_id: int, section: str, blocked: bool):
+    """Blocks every AVAILABLE seat in the section (or unblocks every BLOCKED one).
+    Reserved / booked seats are left alone."""
+    target, source = ("BLOCKED", "AVAILABLE") if blocked else ("AVAILABLE", "BLOCKED")
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM seats WHERE concert_id = :c AND section = :sec LIMIT 1"),
+            {"c": concert_id, "sec": section},
+        ).scalar_one_or_none()
+        if not exists:
+            api_error(404, "SECTION_NOT_FOUND", "This section does not exist for the selected concert.")
+        changed = conn.execute(
+            text("UPDATE seats SET status = :t WHERE concert_id = :c AND section = :sec AND status = :src"),
+            {"t": target, "c": concert_id, "sec": section, "src": source},
+        ).rowcount
+    return {"concert_id": concert_id, "section": section, "status": target, "changed": changed}
+
+
 @app.post("/api/reservations", status_code=200)
 def reserve_seat(payload: ReservationRequest):
     """Atomically reserve a seat for a booking (called by Booking Service).

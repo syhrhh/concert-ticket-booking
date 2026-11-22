@@ -34,6 +34,15 @@ const friendlyErrors = {
   REQUEST_IN_PROGRESS: 'Your booking request is still being processed. Retry in a moment.',
   IDEMPOTENCY_KEY_REUSED: 'The retry key belongs to another request. Select the seat again.',
   INVALID_REQUEST: 'Some of the submitted information is invalid.',
+  INVALID_CREDENTIALS: 'Incorrect e-mail or password.',
+  UNAUTHORIZED: 'Please sign in as staff to continue.',
+  INVALID_TOKEN: 'Your staff session has expired. Please sign in again.',
+  SEAT_NOT_BLOCKED: 'Only a blocked seat can be put back on sale.',
+  SECTION_NOT_FOUND: 'That section does not exist.',
+  EMAIL_TAKEN: 'An account with this e-mail already exists. Try signing in instead.',
+  INVALID_EMAIL: 'Please enter a valid e-mail address.',
+  INVALID_NAME: 'Please enter your name.',
+  ADMIN_ONLY: 'This area is for staff accounts only.',
 };
 
 async function request(service, route, { method = 'GET', body, headers = {}, timeout = 15000 } = {}) {
@@ -87,4 +96,25 @@ export const api = {
   notifications: (userId) => request('notifications', `/api/users/${userId}/notifications`),
   health: (service) => request(service, '/health', { timeout: 4000 }),
   dependencies: () => request('booking', '/health/dependencies', { timeout: 5000 }),
+
+  login: (email, password) => request('booking', '/api/auth/login', { method: 'POST', body: { email, password } }),
+  register: (name, email, password) => request('booking', '/api/auth/register', { method: 'POST', body: { name, email, password } }),
+  me: (token) => request('booking', '/api/auth/me', { headers: bearer(token) }),
+  // ---- staff / admin (JWT in the Authorization header) ----
+  adminLogin: (email, password) => request('booking', '/api/admin/login', { method: 'POST', body: { email, password } }),
+  adminMe: (token) => request('booking', '/api/admin/me', { headers: bearer(token) }),
+  adminStats: (token) => request('booking', '/api/admin/stats', { headers: bearer(token) }),
+  adminBookings: (token, { status = '', concertId = '', q = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (concertId) params.set('concert_id', concertId);
+    if (q.trim()) params.set('q', q.trim());
+    const query = params.toString();
+    return request('booking', `/api/admin/bookings${query ? `?${query}` : ''}`, { headers: bearer(token) });
+  },
+  adminSeatAction: (token, concertId, seatId, action) => request('booking', `/api/admin/concerts/${concertId}/seats/${seatId}/${action}`, { method: 'PUT', headers: bearer(token) }),
+  adminSectionAction: (token, concertId, section, action) => request('booking', `/api/admin/concerts/${concertId}/sections/${encodeURIComponent(section)}/${action}`, { method: 'PUT', headers: bearer(token) }),
+  adminCancel: (token, bookingId) => request('booking', `/api/admin/bookings/${bookingId}`, { method: 'DELETE', headers: bearer(token) }),
 };
+
+function bearer(token) { return { Authorization: `Bearer ${token}` }; }

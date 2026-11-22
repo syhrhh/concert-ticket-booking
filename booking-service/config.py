@@ -59,3 +59,13 @@ OUTBOX_BATCH_SIZE = _int("OUTBOX_BATCH_SIZE", 10)
 OUTBOX_LEASE_SECONDS = _float("OUTBOX_LEASE_SECONDS", 30)
 OUTBOX_MAX_ATTEMPTS = _int("OUTBOX_MAX_ATTEMPTS", 30)
 OUTBOX_MAX_BACKOFF_SECONDS = _float("OUTBOX_MAX_BACKOFF_SECONDS", 10)
+
+# --- Staff / admin access --------------------------------------------------
+DEFAULT_JWT_SECRET = "dev-only-change-me"
+JWT_SECRET = os.getenv("JWT_SECRET", DEFAULT_JWT_SECRET)
+JWT_TTL_SECONDS = _int("JWT_TTL_SECONDS", 8 * 3600)
+# Created on first start if missing. Override all three outside local demos.
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@encore.local").strip().lower()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_NAME = os.getenv("ADMIN_NAME", "ENCORE Admin")
+DEMO_CUSTOMER_PASSWORD = os.getenv("DEMO_CUSTOMER_PASSWORD", "customer123")
