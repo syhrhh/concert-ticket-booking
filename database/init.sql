@@ -1,5 +1,6 @@
 -- Concert Ticket Booking: PostgreSQL demo schema (development only)
 -- Loaded automatically ONCE for a fresh Docker Postgres volume.
+-- Seat status: AVAILABLE -> RESERVED -> BOOKED; BLOCKED = taken off sale by staff.
 -- Keep separate booking and availability application services.
 
 CREATE TABLE IF NOT EXISTS users (
@@ -7,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'CUSTOMER' CHECK (role IN ('CUSTOMER', 'ADMIN')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -28,7 +30,7 @@ CREATE TABLE IF NOT EXISTS seats (
     seat_number VARCHAR(20) NOT NULL,
     price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
     status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
-        CHECK (status IN ('AVAILABLE', 'RESERVED', 'BOOKED')),
+        CHECK (status IN ('AVAILABLE', 'RESERVED', 'BOOKED', 'BLOCKED')),
     UNIQUE (concert_id, seat_number)
 );
 

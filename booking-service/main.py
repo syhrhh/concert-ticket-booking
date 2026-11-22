@@ -19,6 +19,8 @@ from fastapi.responses import JSONResponse
 from psycopg_pool import PoolTimeout
 from pydantic import BaseModel, ConfigDict, Field
 
+import admin
+import auth
 import clients
 import config
 import db
@@ -37,6 +39,8 @@ IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9_.:\-]{8,128}$"
 async def lifespan(app: FastAPI):
     db.init_pool()
     db.run_sql_file("001_booking_schema.sql")
+    db.run_sql_file("002_admin_auth.sql")
+    auth.ensure_admin()
     if config.SEED_DEMO_DATA:
         db.run_sql_file("demo_seed.sql")
     outbox.worker.start()
@@ -51,9 +55,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Idempotency-Key"],
+    allow_headers=["Content-Type", "Idempotency-Key", "Authorization"],
     expose_headers=["Idempotent-Replay", "Retry-After"],
 )
+
+
+app.include_router(admin.router)
 
 
 class BookingRequest(BaseModel):

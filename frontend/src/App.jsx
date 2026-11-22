@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import SeatPicker from './SeatPicker';
+import AdminPanel from './AdminPanel';
 
 const ICONS = {
   ticket: <><path d="M3 8.5A2.5 2.5 0 0 0 5.5 6H20v4a2 2 0 0 0 0 4v4H5.5A2.5 2.5 0 0 0 3 15.5Z"/><path d="M13 6v2m0 3v2m0 3v2"/></>,
@@ -192,6 +193,19 @@ function App() {
   useEffect(() => { loadConcerts(); checkServices(); }, [loadConcerts, checkServices]);
   useEffect(() => { loadBookings(userId); loadNotifications(userId); }, [userId, loadBookings, loadNotifications]);
   useEffect(() => { if (selectedConcertId) loadSeats(selectedConcertId); }, [selectedConcertId, loadSeats]);
+  // Quietly re-check seats every 5 s so seats blocked/booked elsewhere (e.g. by staff) update on screen.
+  useEffect(() => {
+    if (!selectedConcertId || page !== 'discover') return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const { data } = await api.seats(selectedConcertId);
+        if (!Array.isArray(data)) return;
+        setSeatsByConcert(prev => ({ ...prev, [selectedConcertId]: data }));
+        setSelectedSeatId(prev => prev != null && !data.some(seat => seat.seat_id === prev && seat.status === 'AVAILABLE') ? null : prev);
+      } catch { /* keep showing the last known seats */ }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [selectedConcertId, page]);
 
   const filteredConcerts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -264,6 +278,7 @@ function App() {
         <nav className="nav-links" aria-label="Main navigation">
           <button type="button" className={page === 'discover' ? 'active' : ''} onClick={() => navigate('discover')}>Discover</button>
           <button type="button" className={page === 'tickets' ? 'active' : ''} onClick={() => navigate('tickets')}>My tickets <span className="ticket-count">{confirmedCount}</span></button>
+          <button type="button" className={page === 'admin' ? 'active' : ''} onClick={() => navigate('admin')}>Staff</button>
         </nav>
         <div className="header-actions">
           <StatusPill statuses={statuses}/>
@@ -281,7 +296,7 @@ function App() {
     </header>
 
     <main>
-      {page === 'discover' ? <>
+      {page === 'admin' ? <AdminPanel/> : page === 'discover' ? <>
         <section className="hero page-width">
           <div className="hero-copy">
             <div className="hero-kicker"><span className="hero-kicker-line"/> YOUR FRONT ROW STARTS HERE</div>
