@@ -3,7 +3,7 @@ import { api } from './api';
 import './admin.css';
 import './login.css';
 
-const DEMOS = {
+const QUICK_ACCOUNTS = {
   CUSTOMER: [
     { label: 'Customer 01', email: 'user.a@example.com', password: 'customer123' },
     { label: 'Customer 02', email: 'user.b@example.com', password: 'customer123' },
@@ -63,8 +63,8 @@ export default function LoginPage({ onLogin, notice = '' }) {
         ? <p className="login-switch">{registering ? 'Already have an account?' : 'New here?'} <button type="button" onClick={() => { setMode(registering ? 'signin' : 'register'); setError(''); }}>{registering ? 'Sign in' : 'Create an account'}</button></p>
         : <p className="login-switch">Staff accounts are created by an administrator.</p>}
       {!registering && <div className="login-demo">
-        <span>Demo accounts (click to fill)</span>
-        {DEMOS[role].map(d => <button type="button" key={d.email} onClick={() => { setEmail(d.email); setPassword(d.password); setError(''); }}>
+        <span>Quick sign-in (click to fill)</span>
+        {QUICK_ACCOUNTS[role].map(d => <button type="button" key={d.email} onClick={() => { setEmail(d.email); setPassword(d.password); setError(''); }}>
           <b>{d.label}</b><small>{d.email} · {d.password}</small></button>)}
       </div>}
     </form>

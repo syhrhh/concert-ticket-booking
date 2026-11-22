@@ -64,3 +64,21 @@
 .seat-cell{width:28px;height:28px;border-radius:7px;border:1px solid;color:inherit;font-size:.65rem;cursor:pointer;padding:0}
 .seat-cell:disabled{cursor:not-allowed;opacity:.7}
 .seat-cell:not(:disabled):hover{transform:scale(1.12)}
+/* ---- styled dropdown (same look as the "Switch demo user" menu) ---- */
+.dd{position:relative;display:inline-block}
+.dd-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:999px;color:inherit;padding:10px 16px;font:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.dd-trigger:hover{background:rgba(255,255,255,.09)}
+.dd-trigger.is-open,.dd-trigger:focus-visible{outline:none;border-color:rgba(244,160,126,.75);box-shadow:0 0 0 3px rgba(244,160,126,.14)}
+.dd-chevron{flex:none;transition:transform .15s}
+.dd-trigger.is-open .dd-chevron{transform:rotate(180deg)}
+.dd-menu{position:absolute;top:calc(100% + 10px);min-width:250px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:12px;background:rgba(17,16,25,.97);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.12);border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.55);z-index:50}
+.dd-right{right:0}.dd-left{left:0}
+.dd-caption{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:2px 8px 6px}
+.dd-option{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid transparent;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dd-option:hover,.dd-option:focus-visible{outline:none;background:rgba(255,255,255,.07)}
+.dd-option.is-active{background:rgba(237,93,145,.16);border-color:rgba(237,93,145,.42)}
+.dd-icon{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--muted)}
+.dd-option.is-active .dd-icon{background:rgba(237,93,145,.26);color:#ffd0df}
+.dd-check{margin-left:auto;flex:none;color:#ff8fb0}
+.admin-card:has(.dd-menu){position:relative;z-index:30}
+@media (max-width:700px){.dd-right{right:auto;left:0}.dd-menu{min-width:220px}}

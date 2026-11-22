@@ -77,15 +77,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- PBKDF2 hash of the demo password (auth.ensure_demo_customers), so these two can sign in.
 INSERT INTO users (user_id, name, email, password_hash)
 VALUES
-    (1, 'Demo User A', 'user.a@example.com', 'demo-placeholder-not-a-real-hash'),
-    (2, 'Demo User B', 'user.b@example.com', 'demo-placeholder-not-a-real-hash')
+    (1, 'Customer A', 'user.a@example.com', 'demo-placeholder-not-a-real-hash'),
+    (2, 'Customer B', 'user.b@example.com', 'demo-placeholder-not-a-real-hash')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Demonstration data: fictional events, not actual concerts.
 INSERT INTO concerts (concert_id, concert_name, artist_name, venue, concert_date, concert_time, description)
 VALUES
-    (1, 'Demo Concert A', 'Example Artist A', 'Sample Arena', '2027-01-15', '20:00', 'Demo concert for the booking system'),
-    (2, 'Demo Concert B', 'Example Artist B', 'Sample Hall', '2027-02-07', '19:30', 'Second demo concert')
+    (1, 'Concert A', 'Example Artist A', 'Sample Arena', '2027-01-15', '20:00', 'Live concert at Sample Arena'),
+    (2, 'Concert B', 'Example Artist B', 'Sample Hall', '2027-02-07', '19:30', 'Live concert at Sample Hall')
 ON CONFLICT (concert_id) DO NOTHING;
 
 -- Seats are generated from this layout table, one row per section.
